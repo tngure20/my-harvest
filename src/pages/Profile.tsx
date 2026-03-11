@@ -1,19 +1,22 @@
 import AppLayout from "@/components/AppLayout";
 import { Settings, ChevronRight, MapPin, Edit, BookOpen, Star, ShoppingBag, Users } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 
 const farmingActivities = ["Crop Farming", "Dairy Farming", "Poultry"];
 
 const menuItems = [
-  { icon: Edit, label: "Edit Profile", desc: "Update your farming details" },
-  { icon: ShoppingBag, label: "My Listings", desc: "Manage marketplace items" },
-  { icon: Users, label: "Following", desc: "12 farmers you follow" },
-  { icon: Star, label: "Saved Posts", desc: "Bookmarked content" },
-  { icon: BookOpen, label: "Articles", desc: "Read farming guides" },
-  { icon: Settings, label: "Settings", desc: "Notifications, privacy, theme" },
+  { icon: Edit, label: "Edit Profile", desc: "Update your farming details", path: "/settings" },
+  { icon: ShoppingBag, label: "My Listings", desc: "Manage marketplace items", path: "/marketplace" },
+  { icon: Users, label: "Following", desc: "12 farmers you follow", path: "/community" },
+  { icon: Star, label: "Saved Posts", desc: "Bookmarked content", path: "/community" },
+  { icon: BookOpen, label: "Expert Directory", desc: "Find agricultural experts", path: "/experts" },
+  { icon: Settings, label: "Settings", desc: "Notifications, privacy, theme", path: "/settings" },
 ];
 
 const Profile = () => {
+  const navigate = useNavigate();
+
   return (
     <AppLayout>
       <div className="px-4 py-4 space-y-6">
@@ -64,6 +67,7 @@ const Profile = () => {
               initial={{ opacity: 0, x: -8 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.1 + i * 0.03 }}
+              onClick={() => navigate(item.path)}
               className="flex w-full items-center gap-3 rounded-xl px-4 py-3 transition-colors hover:bg-muted"
             >
               <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted">

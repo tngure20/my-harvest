@@ -11,6 +11,9 @@ import FarmManagement from "./pages/FarmManagement";
 import Profile from "./pages/Profile";
 import Onboarding from "./pages/Onboarding";
 import SearchPage from "./pages/SearchPage";
+import Notifications from "./pages/Notifications";
+import Settings from "./pages/Settings";
+import Experts from "./pages/Experts";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -30,6 +33,9 @@ const App = () => (
           <Route path="/profile" element={<Profile />} />
           <Route path="/onboarding" element={<Onboarding />} />
           <Route path="/search" element={<SearchPage />} />
+          <Route path="/notifications" element={<Notifications />} />
+          <Route path="/settings" element={<Settings />} />
+          <Route path="/experts" element={<Experts />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
