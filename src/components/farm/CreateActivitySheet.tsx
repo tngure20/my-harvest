@@ -7,7 +7,7 @@ import type { FarmActivity, FarmTask } from "@/lib/dataService";
 interface CreateActivitySheetProps {
   open: boolean;
   onClose: () => void;
-  onAdd: (activity: FarmActivity) => void;
+  onAdd: (activity: Omit<FarmActivity, "id">) => void;
 }
 
 const activityTypes = [
