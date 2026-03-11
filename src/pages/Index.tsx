@@ -13,9 +13,9 @@ const Index = () => {
           <p className="text-sm text-muted-foreground">Good morning,</p>
           <h1 className="text-2xl font-bold text-foreground">Welcome back, Farmer 🌾</h1>
         </div>
+        <RegionalAlerts />
         <WeatherWidget />
         <FarmingAdvice />
-        <RegionalAlerts />
         <AgriNews />
         <SocialFeed />
       </div>
