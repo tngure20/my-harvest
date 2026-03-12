@@ -1,12 +1,14 @@
 import { useState } from "react";
 import AppLayout from "@/components/AppLayout";
 import { motion } from "framer-motion";
-import { Plus, Wheat, Fish, Hexagon, ChevronRight, Calendar, ClipboardList, TrendingUp, Sprout } from "lucide-react";
+import { Plus, Wheat, Fish, Hexagon, ChevronRight, Calendar, ClipboardList, TrendingUp, Sprout, LogIn } from "lucide-react";
 import { Bug as Cow } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import CreateActivitySheet from "@/components/farm/CreateActivitySheet";
 import ActivityTimeline from "@/components/farm/ActivityTimeline";
 import EmptyState from "@/components/ui/EmptyState";
-import { getFarmActivities, updateFarmActivity, createFarmActivity, getCurrentUser } from "@/lib/dataService";
+import { getFarmActivities, updateFarmActivity, createFarmActivity } from "@/lib/dataService";
+import { useAuth } from "@/contexts/AuthContext";
 import type { FarmActivity, FarmTask, FarmRecord } from "@/lib/dataService";
 
 const typeIcons = {
@@ -26,12 +28,33 @@ const typeColors = {
 };
 
 const FarmManagement = () => {
-  const user = getCurrentUser();
+  const { user, isAuthenticated } = useAuth();
+  const navigate = useNavigate();
   const [activities, setActivities] = useState<FarmActivity[]>(() => getFarmActivities(user?.id));
   const [selectedActivity, setSelectedActivity] = useState<FarmActivity | null>(null);
   const [showCreate, setShowCreate] = useState(false);
 
   const refresh = () => setActivities(getFarmActivities(user?.id));
+
+  if (!isAuthenticated) {
+    return (
+      <AppLayout>
+        <div className="flex flex-col items-center justify-center px-6 py-20 text-center">
+          <Sprout className="h-12 w-12 text-muted-foreground mb-4" />
+          <h1 className="text-xl font-bold text-foreground mb-2">Farm Management</h1>
+          <p className="text-sm text-muted-foreground mb-6 max-w-xs">
+            Sign in to track your farm activities, manage tasks, and keep records of your agricultural operations.
+          </p>
+          <button
+            onClick={() => navigate("/login")}
+            className="flex items-center gap-2 rounded-full bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground"
+          >
+            <LogIn className="h-4 w-4" /> Sign In to Get Started
+          </button>
+        </div>
+      </AppLayout>
+    );
+  }
 
   const upcomingTasks = activities
     .flatMap((a) => a.tasks.map((t) => ({ ...t, activityName: a.name, activityType: a.type, activityId: a.id })))

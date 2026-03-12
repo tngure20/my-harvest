@@ -1,21 +1,34 @@
 import AppLayout from "@/components/AppLayout";
-import { Users, MessageSquare, TrendingUp, Plus } from "lucide-react";
+import { Users, MessageSquare, TrendingUp, Plus, LogIn } from "lucide-react";
 import { motion } from "framer-motion";
+import { useNavigate } from "react-router-dom";
 import { getGroups, getPosts } from "@/lib/dataService";
 import EmptyState from "@/components/ui/EmptyState";
+import { useAuth } from "@/contexts/AuthContext";
 
 const Community = () => {
   const groups = getGroups();
   const posts = getPosts();
+  const { isAuthenticated } = useAuth();
+  const navigate = useNavigate();
 
   return (
     <AppLayout>
       <div className="px-4 py-4 space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold text-foreground">Community</h1>
-          <button className="flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground">
-            <Plus className="h-4 w-4" /> New Post
-          </button>
+          {isAuthenticated ? (
+            <button className="flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground">
+              <Plus className="h-4 w-4" /> New Post
+            </button>
+          ) : (
+            <button
+              onClick={() => navigate("/login")}
+              className="flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
+            >
+              <LogIn className="h-4 w-4" /> Sign in to post
+            </button>
+          )}
         </div>
 
         <div>

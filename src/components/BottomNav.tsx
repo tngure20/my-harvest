@@ -1,23 +1,37 @@
-import { Home, ShoppingBag, Users, Sprout, User } from "lucide-react";
+import { Home, ShoppingBag, Users, Sprout, User, LogIn } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-
-const tabs = [
-  { path: "/", icon: Home, label: "Home" },
-  { path: "/marketplace", icon: ShoppingBag, label: "Market" },
-  { path: "/farm", icon: Sprout, label: "My Farm" },
-  { path: "/community", icon: Users, label: "Community" },
-  { path: "/profile", icon: User, label: "Profile" },
-];
+import { useAuth } from "@/contexts/AuthContext";
 
 const BottomNav = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
 
   // Hide on onboarding/auth pages
-  if (location.pathname.startsWith("/onboarding") || location.pathname.startsWith("/auth")) {
+  if (
+    location.pathname.startsWith("/onboarding") ||
+    location.pathname.startsWith("/login") ||
+    location.pathname.startsWith("/signup") ||
+    location.pathname.startsWith("/forgot-password")
+  ) {
     return null;
   }
+
+  const tabs = isAuthenticated
+    ? [
+        { path: "/", icon: Home, label: "Home" },
+        { path: "/marketplace", icon: ShoppingBag, label: "Market" },
+        { path: "/farm", icon: Sprout, label: "My Farm" },
+        { path: "/community", icon: Users, label: "Community" },
+        { path: "/profile", icon: User, label: "Profile" },
+      ]
+    : [
+        { path: "/", icon: Home, label: "Home" },
+        { path: "/marketplace", icon: ShoppingBag, label: "Market" },
+        { path: "/community", icon: Users, label: "Community" },
+        { path: "/login", icon: LogIn, label: "Sign In" },
+      ];
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 border-t bg-card/95 backdrop-blur-lg safe-area-bottom">
