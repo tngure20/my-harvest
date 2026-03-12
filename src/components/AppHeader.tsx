@@ -1,8 +1,10 @@
-import { Bell, Search, Leaf } from "lucide-react";
+import { Bell, Search, Leaf, LogIn } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 
 const AppHeader = () => {
   const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
 
   return (
     <header className="sticky top-0 z-40 border-b bg-card/95 backdrop-blur-lg">
@@ -21,13 +23,23 @@ const AppHeader = () => {
           >
             <Search className="h-5 w-5" />
           </button>
-          <button
-            onClick={() => navigate("/notifications")}
-            className="relative flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          >
-            <Bell className="h-5 w-5" />
-            <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-destructive" />
-          </button>
+
+          {isAuthenticated ? (
+            <button
+              onClick={() => navigate("/notifications")}
+              className="relative flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <Bell className="h-5 w-5" />
+            </button>
+          ) : (
+            <button
+              onClick={() => navigate("/login")}
+              className="flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
+            >
+              <LogIn className="h-4 w-4" />
+              Sign In
+            </button>
+          )}
         </div>
       </div>
     </header>

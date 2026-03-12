@@ -1,8 +1,8 @@
 import AppLayout from "@/components/AppLayout";
-import { Settings, ChevronRight, MapPin, Edit, BookOpen, Star, ShoppingBag, Users, User as UserIcon } from "lucide-react";
+import { Settings, ChevronRight, MapPin, Edit, BookOpen, Star, ShoppingBag, Users, User as UserIcon, LogOut } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { getCurrentUser } from "@/lib/dataService";
+import { useAuth } from "@/contexts/AuthContext";
 
 const menuItems = [
   { icon: Edit, label: "Edit Profile", desc: "Update your farming details", path: "/settings" },
@@ -15,7 +15,12 @@ const menuItems = [
 
 const Profile = () => {
   const navigate = useNavigate();
-  const user = getCurrentUser();
+  const { user, isAuthenticated, logout } = useAuth();
+
+  const handleLogout = () => {
+    logout();
+    navigate("/");
+  };
 
   return (
     <AppLayout>
@@ -46,52 +51,66 @@ const Profile = () => {
             </div>
           </div>
 
-          <div className="mt-4 grid grid-cols-3 gap-3 border-t pt-4">
-            <div className="text-center">
-              <p className="text-lg font-bold text-foreground">{user?.postsCount || 0}</p>
-              <p className="text-[11px] text-muted-foreground">Posts</p>
+          {isAuthenticated && (
+            <div className="mt-4 grid grid-cols-3 gap-3 border-t pt-4">
+              <div className="text-center">
+                <p className="text-lg font-bold text-foreground">{user?.postsCount || 0}</p>
+                <p className="text-[11px] text-muted-foreground">Posts</p>
+              </div>
+              <div className="text-center">
+                <p className="text-lg font-bold text-foreground">{user?.followers || 0}</p>
+                <p className="text-[11px] text-muted-foreground">Followers</p>
+              </div>
+              <div className="text-center">
+                <p className="text-lg font-bold text-foreground">{user?.following || 0}</p>
+                <p className="text-[11px] text-muted-foreground">Following</p>
+              </div>
             </div>
-            <div className="text-center">
-              <p className="text-lg font-bold text-foreground">{user?.followers || 0}</p>
-              <p className="text-[11px] text-muted-foreground">Followers</p>
-            </div>
-            <div className="text-center">
-              <p className="text-lg font-bold text-foreground">{user?.following || 0}</p>
-              <p className="text-[11px] text-muted-foreground">Following</p>
-            </div>
-          </div>
+          )}
         </motion.div>
 
-        {!user && (
+        {!isAuthenticated && (
           <div className="harvest-card p-4 text-center">
             <p className="text-sm text-muted-foreground">Sign in to access your full profile and manage your farm.</p>
-            <button onClick={() => navigate("/onboarding")} className="mt-3 rounded-full bg-primary px-5 py-2 text-sm font-medium text-primary-foreground">
-              Get Started
+            <button onClick={() => navigate("/login")} className="mt-3 rounded-full bg-primary px-5 py-2 text-sm font-medium text-primary-foreground">
+              Sign In
             </button>
           </div>
         )}
 
-        <div className="space-y-1">
-          {menuItems.map((item, i) => (
-            <motion.button
-              key={item.label}
-              initial={{ opacity: 0, x: -8 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.1 + i * 0.03 }}
-              onClick={() => navigate(item.path)}
-              className="flex w-full items-center gap-3 rounded-xl px-4 py-3 transition-colors hover:bg-muted"
+        {isAuthenticated && (
+          <>
+            <div className="space-y-1">
+              {menuItems.map((item, i) => (
+                <motion.button
+                  key={item.label}
+                  initial={{ opacity: 0, x: -8 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.1 + i * 0.03 }}
+                  onClick={() => navigate(item.path)}
+                  className="flex w-full items-center gap-3 rounded-xl px-4 py-3 transition-colors hover:bg-muted"
+                >
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted">
+                    <item.icon className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                  <div className="flex-1 text-left">
+                    <p className="text-sm font-medium text-foreground">{item.label}</p>
+                    <p className="text-[11px] text-muted-foreground">{item.desc}</p>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                </motion.button>
+              ))}
+            </div>
+
+            <button
+              onClick={handleLogout}
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-destructive/20 px-4 py-3 text-sm font-medium text-destructive transition-colors hover:bg-destructive/5"
             >
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted">
-                <item.icon className="h-4 w-4 text-muted-foreground" />
-              </div>
-              <div className="flex-1 text-left">
-                <p className="text-sm font-medium text-foreground">{item.label}</p>
-                <p className="text-[11px] text-muted-foreground">{item.desc}</p>
-              </div>
-              <ChevronRight className="h-4 w-4 text-muted-foreground" />
-            </motion.button>
-          ))}
-        </div>
+              <LogOut className="h-4 w-4" />
+              Sign Out
+            </button>
+          </>
+        )}
       </div>
     </AppLayout>
   );

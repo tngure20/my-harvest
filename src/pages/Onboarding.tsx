@@ -1,26 +1,35 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { AnimatePresence } from "framer-motion";
-import { Leaf, ArrowRight, ArrowLeft, MapPin, Check } from "lucide-react";
+import { Leaf, ArrowRight, ArrowLeft, MapPin, Check, Globe, ChevronDown } from "lucide-react";
 import OnboardingStepWrapper from "@/components/onboarding/OnboardingStepWrapper";
 import FollowUpSteps from "@/components/onboarding/FollowUpSteps";
 import { farmingTypes, farmScales, defaultOnboardingData, type OnboardingData } from "@/components/onboarding/onboardingData";
+import { kenyanCounties, countries, type LocationData } from "@/components/onboarding/locationData";
+import { useAuth } from "@/contexts/AuthContext";
 
 const Onboarding = () => {
   const navigate = useNavigate();
-  const [data, setData] = useState<OnboardingData>(defaultOnboardingData);
+  const { user, updateUser, setOnboardingComplete } = useAuth();
+  const [data, setData] = useState<OnboardingData>({
+    ...defaultOnboardingData,
+    name: user?.name || "",
+  });
   const [stepIndex, setStepIndex] = useState(0);
+  const [locationData, setLocationData] = useState<LocationData>({
+    country: "KE",
+    countryCode: "KE",
+    region: "",
+  });
 
   // Dynamic steps based on selected farming types
   const steps = useMemo(() => {
     const base = [
       { id: "welcome", title: "Welcome to Harvest", subtitle: "Let's personalize your experience" },
-      { id: "name", title: "What's your name?", subtitle: "We'll use this across the platform" },
       { id: "location", title: "Where are you located?", subtitle: "For localized weather and market info" },
       { id: "types", title: "What do you farm?", subtitle: "Select all that apply" },
     ];
 
-    // Insert follow-up steps for each selected farming type
     const followUps = data.selectedTypes
       .filter((t) => ["livestock", "poultry", "crop", "fruit", "aquaculture", "beekeeping"].includes(t))
       .map((t) => {
@@ -41,37 +50,36 @@ const Onboarding = () => {
   }, [data.selectedTypes]);
 
   const currentStep = steps[stepIndex];
+  const isLastStep = stepIndex === steps.length - 1;
 
-  const canProceed = () => {
-    if (!currentStep) return false;
-    switch (currentStep.id) {
-      case "name": return data.name.trim().length > 0;
-      case "location": return data.location.trim().length > 0;
-      case "types": return data.selectedTypes.length > 0;
-      case "scale": return data.selectedScale.length > 0;
-      case "followup-livestock":
-        return data.livestockAnimals.length > 0;
-      case "followup-poultry":
-        return data.poultryBirds.length > 0;
-      case "followup-crop":
-        return data.crops.length > 0;
-      case "followup-fruit":
-        return data.fruits.length > 0;
-      case "followup-aquaculture":
-        return data.fishSpecies.length > 0;
-      case "followup-beekeeping":
-        return data.hiveCount.trim().length > 0;
-      default: return true;
+  // All steps are optional/skippable - canProceed is always true
+  const canProceed = () => true;
+
+  const finish = () => {
+    // Save onboarding data to user profile
+    const locationString = locationData.region
+      ? `${locationData.region}, ${countries.find(c => c.id === locationData.countryCode)?.name.replace(/\s.+$/, '') || locationData.countryCode}`
+      : countries.find(c => c.id === locationData.countryCode)?.name.replace(/\s.+$/, '') || "";
+
+    if (user) {
+      updateUser({
+        location: locationString || user.location,
+        farmingActivities: data.selectedTypes.length > 0 ? data.selectedTypes : user.farmingActivities,
+      });
     }
+    setOnboardingComplete();
+    navigate("/");
   };
 
   const next = () => {
-    if (stepIndex === steps.length - 1) {
-      navigate("/");
+    if (isLastStep) {
+      finish();
       return;
     }
     setStepIndex((s) => Math.min(s + 1, steps.length - 1));
   };
+
+  const skip = () => next();
 
   const back = () => setStepIndex((s) => Math.max(s - 1, 0));
 
@@ -83,6 +91,8 @@ const Onboarding = () => {
         : [...prev.selectedTypes, id],
     }));
   };
+
+  const selectedCountry = countries.find(c => c.id === locationData.countryCode);
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -111,34 +121,59 @@ const Onboarding = () => {
                 <p className="max-w-xs text-center text-sm text-muted-foreground leading-relaxed">
                   Harvest connects you with farmers, experts, weather data, markets, and tools — all in one place.
                 </p>
-              </div>
-            )}
-
-            {currentStep.id === "name" && (
-              <div>
-                <label className="text-sm font-medium text-foreground">Your name</label>
-                <input
-                  value={data.name}
-                  onChange={(e) => setData((p) => ({ ...p, name: e.target.value }))}
-                  placeholder="e.g. Jane Wanjiku"
-                  className="mt-2 w-full rounded-xl border bg-card px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary"
-                />
+                <p className="text-xs text-muted-foreground">All questions are optional — skip any time</p>
               </div>
             )}
 
             {currentStep.id === "location" && (
-              <div>
-                <label className="text-sm font-medium text-foreground">Your location</label>
-                <div className="relative mt-2">
-                  <MapPin className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                  <input
-                    value={data.location}
-                    onChange={(e) => setData((p) => ({ ...p, location: e.target.value }))}
-                    placeholder="e.g. Nakuru, Kenya"
-                    className="w-full rounded-xl border bg-card py-3 pl-9 pr-4 text-sm outline-none focus:ring-2 focus:ring-primary"
-                  />
+              <div className="space-y-4">
+                {/* Country selector */}
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-foreground">
+                    <Globe className="mr-1 inline h-4 w-4" /> Country
+                  </label>
+                  <div className="relative">
+                    <select
+                      value={locationData.countryCode}
+                      onChange={(e) => setLocationData({ country: e.target.value, countryCode: e.target.value, region: "" })}
+                      className="w-full appearance-none rounded-xl border bg-card px-4 py-3 pr-10 text-sm outline-none focus:ring-2 focus:ring-primary"
+                    >
+                      {countries.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-3 top-3 h-4 w-4 text-muted-foreground" />
+                  </div>
                 </div>
-                <button className="mt-2 text-xs font-medium text-primary">📍 Detect my location</button>
+
+                {/* Region selector - county dropdown for Kenya, text input for others */}
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-foreground">
+                    <MapPin className="mr-1 inline h-4 w-4" /> {selectedCountry?.regionLabel || "Region"}
+                  </label>
+                  {locationData.countryCode === "KE" ? (
+                    <div className="relative">
+                      <select
+                        value={locationData.region}
+                        onChange={(e) => setLocationData(prev => ({ ...prev, region: e.target.value }))}
+                        className="w-full appearance-none rounded-xl border bg-card px-4 py-3 pr-10 text-sm outline-none focus:ring-2 focus:ring-primary"
+                      >
+                        <option value="">Select county...</option>
+                        {kenyanCounties.map((county) => (
+                          <option key={county} value={county}>{county}</option>
+                        ))}
+                      </select>
+                      <ChevronDown className="pointer-events-none absolute right-3 top-3 h-4 w-4 text-muted-foreground" />
+                    </div>
+                  ) : (
+                    <input
+                      value={locationData.region}
+                      onChange={(e) => setLocationData(prev => ({ ...prev, region: e.target.value }))}
+                      placeholder={`Enter your ${selectedCountry?.regionLabel?.toLowerCase() || "region"}`}
+                      className="w-full rounded-xl border bg-card px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary"
+                    />
+                  )}
+                </div>
               </div>
             )}
 
@@ -221,14 +256,25 @@ const Onboarding = () => {
           ) : (
             <div />
           )}
-          <button
-            onClick={next}
-            disabled={!canProceed()}
-            className="flex items-center gap-2 rounded-full bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground transition-opacity disabled:opacity-40"
-          >
-            {stepIndex === steps.length - 1 ? "Get Started" : "Continue"}
-            <ArrowRight className="h-4 w-4" />
-          </button>
+
+          <div className="flex items-center gap-3">
+            {/* Skip button for non-welcome, non-done steps */}
+            {currentStep.id !== "welcome" && currentStep.id !== "done" && (
+              <button
+                onClick={skip}
+                className="text-sm font-medium text-muted-foreground hover:text-foreground"
+              >
+                Skip
+              </button>
+            )}
+            <button
+              onClick={next}
+              className="flex items-center gap-2 rounded-full bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground transition-opacity"
+            >
+              {isLastStep ? "Get Started" : "Continue"}
+              <ArrowRight className="h-4 w-4" />
+            </button>
+          </div>
         </div>
       </div>
     </div>
