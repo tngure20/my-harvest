@@ -44,6 +44,14 @@ const tools = [
 ];
 
 const Toolkit = () => {
+  const navigate = useNavigate();
+
+  const handleToolClick = (title: string) => {
+    if (title === "AI Farm Assistant") {
+      navigate("/assistant");
+    }
+  };
+
   return (
     <AppLayout>
       <div className="px-4 py-4 space-y-6">
