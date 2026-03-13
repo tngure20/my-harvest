@@ -1,6 +1,8 @@
 import AppLayout from "@/components/AppLayout";
 import { Calculator, Droplets, Wheat, Bug as Cow, Fish, Hexagon, Bot, ArrowRight } from "lucide-react";
 import { motion } from "framer-motion";
+import { useNavigate } from "react-router-dom";
+import { motion } from "framer-motion";
 
 const tools = [
   {
