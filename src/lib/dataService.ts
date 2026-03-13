@@ -239,6 +239,70 @@ export function deletePost(id: string) {
   setStore("posts", getStore<Post>("posts").filter((p) => p.id !== id));
 }
 
+// ─── Comments ────────────────────────────────────────────────────────────────
+
+export function getComments(postId: string): Comment[] {
+  return getStore<Comment>("comments").filter((c) => c.postId === postId).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+}
+
+export function createComment(comment: Omit<Comment, "id" | "createdAt" | "reported">): Comment {
+  const newComment: Comment = { ...comment, id: generateId(), createdAt: new Date().toISOString(), reported: false };
+  const comments = getStore<Comment>("comments");
+  comments.push(newComment);
+  setStore("comments", comments);
+  const posts = getStore<Post>("posts");
+  const postIdx = posts.findIndex((p) => p.id === comment.postId);
+  if (postIdx !== -1) {
+    posts[postIdx].comments = (posts[postIdx].comments || 0) + 1;
+    setStore("posts", posts);
+  }
+  return newComment;
+}
+
+// ─── Reactions ───────────────────────────────────────────────────────────────
+
+export function getUserReaction(postId: string, userId: string): "like" | "dislike" | null {
+  const reaction = getStore<Reaction>("reactions").find((r) => r.postId === postId && r.userId === userId);
+  return reaction?.type ?? null;
+}
+
+export function toggleReaction(postId: string, userId: string, type: "like" | "dislike") {
+  const reactions = getStore<Reaction>("reactions");
+  const existing = reactions.findIndex((r) => r.postId === postId && r.userId === userId);
+  const posts = getStore<Post>("posts");
+  const postIdx = posts.findIndex((p) => p.id === postId);
+
+  if (existing !== -1) {
+    const prev = reactions[existing].type;
+    if (prev === type) {
+      reactions.splice(existing, 1);
+      if (postIdx !== -1 && type === "like") posts[postIdx].likes = Math.max(0, (posts[postIdx].likes || 0) - 1);
+    } else {
+      reactions[existing].type = type;
+      if (postIdx !== -1) {
+        if (type === "like") posts[postIdx].likes = (posts[postIdx].likes || 0) + 1;
+        else posts[postIdx].likes = Math.max(0, (posts[postIdx].likes || 0) - 1);
+      }
+    }
+  } else {
+    reactions.push({ id: generateId(), postId, userId, type });
+    if (postIdx !== -1 && type === "like") posts[postIdx].likes = (posts[postIdx].likes || 0) + 1;
+  }
+
+  setStore("reactions", reactions);
+  setStore("posts", posts);
+}
+
+// ─── Notification Create ─────────────────────────────────────────────────────
+
+export function createNotification(notification: Omit<Notification, "id" | "createdAt" | "read">): Notification {
+  const n: Notification = { ...notification, id: generateId(), createdAt: new Date().toISOString(), read: false };
+  const all = getStore<Notification>("notifications");
+  all.push(n);
+  setStore("notifications", all);
+  return n;
+}
+
 // ─── Marketplace ─────────────────────────────────────────────────────────────
 
 export function getListings(): MarketplaceListing[] {
