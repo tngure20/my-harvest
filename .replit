@@ -52,3 +52,4 @@ externalPort = 8081
 VITE_SUPABASE_URL = "https://gciybjlwambconeyhigk.supabase.co"
 VITE_SUPABASE_ANON_KEY = "sb_publishable_KiQb_bzkykVoxWnD4cX5jA_8XT0alXQ"
 VITE_GOOGLE_CLIENT_ID = "506962736220-7j30f6ss1n6nch9h45nlnus9rrfnjpj4.apps.googleusercontent.com"
+VITE_APP_URL = "https://968e2907-a517-4b57-878f-02398e14e978-00-21sf4t821iydr.spock.replit.dev"
