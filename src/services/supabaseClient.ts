@@ -6,11 +6,10 @@ const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 export const supabase = createClient(supabaseUrl, supabaseKey)
 
 export const signInWithGoogle = async () => {
-  const appUrl = import.meta.env.VITE_APP_URL || window.location.origin
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "google",
     options: {
-      redirectTo: appUrl,
+      redirectTo: "https://my-harvest.vercel.app",
     },
   })
   if (error) throw error
