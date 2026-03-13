@@ -1,5 +1,3 @@
-// src/App.tsx
-import { useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -7,9 +5,6 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { initializeApp } from "@/lib/dataService";
-import { supabase } from "./services/supabaseClient"; // Supabase client
-import { syncProfile } from "./services/profileService"; // Auto profile creation
-import { GoogleLoginButton } from "./components/GoogleLoginButton";
 import Index from "./pages/Index";
 import Marketplace from "./pages/Marketplace";
 import Community from "./pages/Community";
@@ -29,24 +24,11 @@ import AdminLogin from "./pages/AdminLogin";
 import AdminDashboard from "./pages/AdminDashboard";
 import NotFound from "./pages/NotFound";
 
-// Initialize seed data (admin account) on first run
 initializeApp();
 
 const queryClient = new QueryClient();
 
 const App = () => {
-  useEffect(() => {
-    // Sync profile if user is already logged in on page load
-    syncProfile();
-
-    // Listen to auth state changes (login/logout)
-    const { subscription } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) syncProfile();
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
@@ -74,10 +56,6 @@ const App = () => {
               <Route path="/admin" element={<AdminDashboard />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
-            {/* Add Google login button somewhere globally accessible */}
-            <div className="fixed bottom-4 right-4">
-              <GoogleLoginButton />
-            </div>
           </AuthProvider>
         </BrowserRouter>
       </TooltipProvider>

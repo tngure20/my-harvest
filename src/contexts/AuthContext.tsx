@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from "react";
 import { getCurrentUser, setCurrentUser, type User } from "@/lib/dataService";
+import { supabase } from "@/services/supabaseClient";
 
 interface AuthContextType {
   user: User | null;
@@ -31,6 +32,26 @@ function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
+function supabaseUserToLocal(supabaseUser: { id: string; email?: string; user_metadata?: Record<string, string> }): User {
+  const meta = supabaseUser.user_metadata ?? {};
+  const name = meta.full_name ?? meta.name ?? supabaseUser.email?.split("@")[0] ?? "User";
+  return {
+    id: supabaseUser.id,
+    name,
+    email: supabaseUser.email ?? "",
+    role: "farmer",
+    location: "",
+    avatar: meta.avatar_url ?? name.charAt(0).toUpperCase(),
+    farmingActivities: [],
+    bio: "",
+    followers: 0,
+    following: 0,
+    postsCount: 0,
+    createdAt: new Date().toISOString(),
+    suspended: false,
+  };
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(getCurrentUser);
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(() => {
@@ -38,6 +59,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   });
 
   const isAuthenticated = user !== null;
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        const localUser = supabaseUserToLocal(session.user);
+        setCurrentUser(localUser);
+        setUser(localUser);
+        const onboarded = localStorage.getItem(`harvest_onboarded_${localUser.id}`);
+        setHasCompletedOnboarding(onboarded === "true");
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        const localUser = supabaseUserToLocal(session.user);
+        setCurrentUser(localUser);
+        setUser(localUser);
+        const onboarded = localStorage.getItem(`harvest_onboarded_${localUser.id}`);
+        setHasCompletedOnboarding(onboarded === "true");
+      } else if (_event === "SIGNED_OUT") {
+        setCurrentUser(null);
+        setUser(null);
+        setHasCompletedOnboarding(false);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   const login = useCallback((email: string, password: string) => {
     const users = getStore<User & { password: string }>("users");
@@ -48,7 +97,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { password: _, ...safeUser } = found;
     setCurrentUser(safeUser);
     setUser(safeUser);
-    // Check if onboarding was completed for this user
     const onboarded = localStorage.getItem(`harvest_onboarded_${safeUser.id}`);
     setHasCompletedOnboarding(onboarded === "true");
     return { success: true };
@@ -84,7 +132,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { success: true };
   }, []);
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
+    await supabase.auth.signOut();
     setCurrentUser(null);
     setUser(null);
     setHasCompletedOnboarding(false);
@@ -95,7 +144,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!prev) return prev;
       const updated = { ...prev, ...updates };
       setCurrentUser(updated);
-      // Also update in users store
       const users = getStore<User & { password?: string }>("users");
       const idx = users.findIndex((u) => u.id === updated.id);
       if (idx !== -1) {
