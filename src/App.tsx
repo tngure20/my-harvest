@@ -9,8 +9,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { initializeApp } from "@/lib/dataService";
 import { supabase } from "./services/supabaseClient"; // Supabase client
 import { syncProfile } from "./services/profileService"; // Auto profile creation
-import GoogleLoginButton from "./components/GoogleLoginButton"; // Login button
-
+import { GoogleLoginButton } from "./components/GoogleLoginButton";
 import Index from "./pages/Index";
 import Marketplace from "./pages/Marketplace";
 import Community from "./pages/Community";
