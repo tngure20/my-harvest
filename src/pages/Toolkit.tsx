@@ -70,6 +70,7 @@ const Toolkit = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.05 }}
               className="harvest-card p-4 cursor-pointer transition-shadow hover:shadow-md"
+              onClick={() => handleToolClick(tool.title)}
             >
               <div className="flex items-start gap-3">
                 <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${tool.color}`}>
