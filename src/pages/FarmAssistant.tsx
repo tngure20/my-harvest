@@ -4,7 +4,8 @@ import { Bot, Send, Lightbulb, Stethoscope, CalendarDays, ArrowLeft, BookOpen, E
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
-import { getFarmActivities } from "@/lib/dataService";
+import { fetchFarmActivities } from "@/lib/supabaseService";
+import { useQuery } from "@tanstack/react-query";
 import { getGuidance, getActivityAdvice, type AssistantMode, type GuidanceResponse, type KnowledgeSource } from "@/lib/agricultureKnowledge";
 import ReactMarkdown from "react-markdown";
 
@@ -99,7 +100,11 @@ const FarmAssistant = () => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const farmActivities = isAuthenticated ? getFarmActivities(user?.id) : [];
+  const { data: farmActivities = [] } = useQuery({
+    queryKey: ["/api/farm-activities", user?.id],
+    queryFn: () => fetchFarmActivities(user!.id),
+    enabled: !!user?.id && isAuthenticated,
+  });
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });

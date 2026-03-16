@@ -1,7 +1,7 @@
 import { ArrowLeft, Check, Plus, Calendar, FileText, Bot } from "lucide-react";
 import { motion } from "framer-motion";
 import type { FarmActivity } from "@/lib/dataService";
-import { updateFarmActivity } from "@/lib/dataService";
+import { addFarmRecord } from "@/lib/supabaseService";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AddRecordSheet from "./AddRecordSheet";
@@ -18,11 +18,17 @@ const ActivityTimeline = ({ activity, onBack, onToggleTask }: ActivityTimelinePr
   const [records, setRecords] = useState(activity.records);
   const navigate = useNavigate();
 
-  const handleAddRecord = (record: { type: string; description: string; date: string; quantity?: string }) => {
+  const handleAddRecord = async (record: { type: string; description: string; date: string; quantity?: string }) => {
     const newRecord = { ...record, id: crypto.randomUUID() };
     const updatedRecords = [...records, newRecord];
     setRecords(updatedRecords);
-    updateFarmActivity(activity.id, { records: updatedRecords });
+    await addFarmRecord({
+      activity_id: activity.id,
+      type: record.type,
+      description: record.description,
+      date: record.date || undefined,
+      quantity: record.quantity,
+    }).catch(() => {});
     setShowAddRecord(false);
   };
 

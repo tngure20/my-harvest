@@ -7,6 +7,7 @@ import FollowUpSteps from "@/components/onboarding/FollowUpSteps";
 import { farmingTypes, farmScales, defaultOnboardingData, type OnboardingData } from "@/components/onboarding/onboardingData";
 import { kenyanCounties, countries, type LocationData } from "@/components/onboarding/locationData";
 import { useAuth } from "@/contexts/AuthContext";
+import { updateProfile } from "@/lib/supabaseService";
 
 const Onboarding = () => {
   const navigate = useNavigate();
@@ -22,7 +23,6 @@ const Onboarding = () => {
     region: "",
   });
 
-  // Dynamic steps based on selected farming types
   const steps = useMemo(() => {
     const base = [
       { id: "welcome", title: "Welcome to Harvest", subtitle: "Let's personalize your experience" },
@@ -52,34 +52,39 @@ const Onboarding = () => {
   const currentStep = steps[stepIndex];
   const isLastStep = stepIndex === steps.length - 1;
 
-  // All steps are optional/skippable - canProceed is always true
-  const canProceed = () => true;
-
-  const finish = () => {
-    // Save onboarding data to user profile
+  const finish = async () => {
+    const country = countries.find(c => c.id === locationData.countryCode);
     const locationString = locationData.region
-      ? `${locationData.region}, ${countries.find(c => c.id === locationData.countryCode)?.name.replace(/\s.+$/, '') || locationData.countryCode}`
-      : countries.find(c => c.id === locationData.countryCode)?.name.replace(/\s.+$/, '') || "";
+      ? `${locationData.region}, ${country?.name.replace(/\s.+$/, '') || locationData.countryCode}`
+      : country?.name.replace(/\s.+$/, '') || "";
 
     if (user) {
-      updateUser({
+      const updates = {
         location: locationString || user.location,
         farmingActivities: data.selectedTypes.length > 0 ? data.selectedTypes : user.farmingActivities,
-      });
+      };
+      updateUser(updates);
+      await updateProfile(user.id, {
+        location: locationString || user.location || undefined,
+        farming_types: data.selectedTypes.length > 0 ? data.selectedTypes : undefined,
+        farm_scale: data.selectedScale || undefined,
+        onboarding_completed: true,
+      }).catch(() => {});
     }
+
     setOnboardingComplete();
     navigate("/");
   };
 
   const next = () => {
-    if (isLastStep) {
-      finish();
-      return;
-    }
+    if (isLastStep) { finish(); return; }
     setStepIndex((s) => Math.min(s + 1, steps.length - 1));
   };
 
-  const skip = () => next();
+  const skip = () => {
+    if (isLastStep) { finish(); return; }
+    setStepIndex((s) => Math.min(s + 1, steps.length - 1));
+  };
 
   const back = () => setStepIndex((s) => Math.max(s - 1, 0));
 
@@ -96,7 +101,6 @@ const Onboarding = () => {
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      {/* Progress */}
       <div className="px-4 pt-4">
         <div className="flex gap-1.5">
           {steps.map((_, i) => (
@@ -127,7 +131,6 @@ const Onboarding = () => {
 
             {currentStep.id === "location" && (
               <div className="space-y-4">
-                {/* Country selector */}
                 <div>
                   <label className="mb-1.5 block text-sm font-medium text-foreground">
                     <Globe className="mr-1 inline h-4 w-4" /> Country
@@ -146,7 +149,6 @@ const Onboarding = () => {
                   </div>
                 </div>
 
-                {/* Region selector - county dropdown for Kenya, text input for others */}
                 <div>
                   <label className="mb-1.5 block text-sm font-medium text-foreground">
                     <MapPin className="mr-1 inline h-4 w-4" /> {selectedCountry?.regionLabel || "Region"}
@@ -247,7 +249,6 @@ const Onboarding = () => {
           </OnboardingStepWrapper>
         </AnimatePresence>
 
-        {/* Navigation */}
         <div className="flex items-center justify-between pt-6">
           {stepIndex > 0 ? (
             <button onClick={back} className="flex items-center gap-1 text-sm font-medium text-muted-foreground">
@@ -258,7 +259,6 @@ const Onboarding = () => {
           )}
 
           <div className="flex items-center gap-3">
-            {/* Skip button for non-welcome, non-done steps */}
             {currentStep.id !== "welcome" && currentStep.id !== "done" && (
               <button
                 onClick={skip}

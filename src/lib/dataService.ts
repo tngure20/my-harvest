@@ -538,28 +538,8 @@ export function searchPlatform(query: string): SearchResult[] {
   return results;
 }
 
-// ─── Initialize seed admin (first run only) ──────────────────────────────────
-// Creates a default admin account if none exists
+// ─── Initialize app (no hardcoded seed data) ─────────────────────────────────
+// Admin accounts are managed via Supabase — set role = 'admin' in the profiles table
 export function initializeApp() {
-  const users = getStore<User>("users");
-  const hasAdmin = users.some((u) => u.role === "admin");
-  if (!hasAdmin) {
-    const admin: User = {
-      id: "admin-001",
-      name: "Harvest Admin",
-      email: "admin@harvest.app",
-      role: "admin",
-      location: "Nairobi, Kenya",
-      avatar: "HA",
-      farmingActivities: [],
-      bio: "Platform administrator",
-      followers: 0,
-      following: 0,
-      postsCount: 0,
-      createdAt: new Date().toISOString(),
-      suspended: false,
-    };
-    users.push(admin);
-    setStore("users", users);
-  }
+  // No hardcoded users or seed data — all content comes from real users via Supabase
 }

@@ -1,0 +1,17 @@
+Harvest must be a Progressive Web App built for farmers, fully integrated with Supabase for backend data storage. Use the provided database schema for profiles, farm_activities, farm_records, posts, comments, marketplace_listings, and notifications, including the trigger for creating profiles on new auth users. Do not include any hardcoded users, posts, or marketplace items. The app should start with empty states.
+
+Implement a complete authentication system: users can register via email/password (with password confirmation and forgot password flow) and a Google login button. Google integration will be configured manually later, so the UI and logic should be prepared but not require active credentials. After login or signup, the Google login button disappears and is replaced by the authenticated navigation and profile access.
+
+First-time users should go through an optional onboarding questionnaire to personalize their experience. Onboarding should ask for location (support all 47 Kenyan counties and international countries/regions), farming types, and farm scale. All questions must be skippable and stored in the profiles table for later personalization.
+
+The site should completely separate the guest experience from the authenticated user experience. Guests can view public posts, marketplace listings, and general info but cannot post, comment, or manage farms. Authenticated users unlock full functionality including farm management, posting content (text, images, videos), commenting, marketplace listing creation, notifications, and AI-assisted farming advice (AI integration to be configured manually).
+
+Ensure navigation is clear: Home, My Farm, Community, Market, Profile. Clicking any post, listing, or content item opens a dedicated page. Filters, toggles, and search functions must work across posts, marketplace, and farms. Notifications should function and can be toggled per user preference.
+
+The My Farm section should allow users to create farm activities and log farm records. Posts, comments, and marketplace listings must use Supabase tables dynamically. All actions (create, edit, delete) should update the database immediately; empty states should display appropriate messages when no data exists.
+
+The platform must include an admin panel accessible only to users with the admin role in profiles.role. Admins can manage users, posts, marketplace listings, alerts, articles, and expert accounts without editing code. Admins can also modify site pages, layouts, and features dynamically.
+
+The system should be structured so that Supabase integration is modular, allowing you to connect authentication, storage, and database manually later. All tables, triggers, and indexes provided must be fully respected. Do not include any preloaded content; the platform must generate content only from real users. Support light/dark mode themes and responsive mobile-first design.
+
+Finally, all SQL tables and triggers must be connected to the frontend so that creating a user, posting content, managing farms, or adding marketplace items interacts directly with Supabase. Ensure the onboarding and login flows interact with the profiles table automatically.

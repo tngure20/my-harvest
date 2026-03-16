@@ -1,4 +1,3 @@
-// src/services/profileService.ts
 import { supabase } from "./supabaseClient";
 
 export const syncProfile = async () => {
@@ -8,7 +7,7 @@ export const syncProfile = async () => {
 
   const { data, error } = await supabase
     .from("profiles")
-    .select("*")
+    .select("id")
     .eq("id", user.id)
     .single();
 
@@ -17,8 +16,10 @@ export const syncProfile = async () => {
   if (!data) {
     await supabase.from("profiles").insert({
       id: user.id,
-      full_name: user.user_metadata.full_name,
+      full_name: user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split("@")[0],
       email: user.email,
+      avatar_url: user.user_metadata?.avatar_url || null,
+      role: "farmer",
     });
   }
 };

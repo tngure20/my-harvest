@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from "react";
 import { getCurrentUser, setCurrentUser, type User } from "@/lib/dataService";
 import { supabase } from "@/services/supabaseClient";
+import { fetchProfile } from "@/lib/supabaseService";
 
 interface AuthContextType {
   user: User | null;
@@ -11,6 +12,7 @@ interface AuthContextType {
   updateUser: (updates: Partial<User>) => void;
   hasCompletedOnboarding: boolean;
   setOnboardingComplete: () => void;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -19,9 +21,7 @@ function getStore<T>(key: string): T[] {
   try {
     const data = localStorage.getItem(`harvest_${key}`);
     return data ? JSON.parse(data) : [];
-  } catch {
-    return [];
-  }
+  } catch { return []; }
 }
 
 function setStore<T>(key: string, data: T[]) {
@@ -32,52 +32,61 @@ function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
-function supabaseUserToLocal(supabaseUser: { id: string; email?: string; user_metadata?: Record<string, string> }): User {
-  const meta = supabaseUser.user_metadata ?? {};
-  const name = meta.full_name ?? meta.name ?? supabaseUser.email?.split("@")[0] ?? "User";
-  return {
-    id: supabaseUser.id,
-    name,
-    email: supabaseUser.email ?? "",
-    role: "farmer",
-    location: "",
-    avatar: meta.avatar_url ?? name.charAt(0).toUpperCase(),
-    farmingActivities: [],
-    bio: "",
-    followers: 0,
-    following: 0,
-    postsCount: 0,
-    createdAt: new Date().toISOString(),
-    suspended: false,
-  };
-}
-
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(getCurrentUser);
-  const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(() => {
-    return localStorage.getItem("harvest_onboarding_complete") === "true";
-  });
+  const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(() =>
+    localStorage.getItem("harvest_onboarding_complete") === "true"
+  );
 
   const isAuthenticated = user !== null;
 
+  const applySupabaseSession = useCallback(async (supabaseUser: { id: string; email?: string; user_metadata?: Record<string, string> }) => {
+    // Try to load full profile from Supabase
+    const profile = await fetchProfile(supabaseUser.id);
+    if (profile) {
+      setCurrentUser(profile);
+      setUser(profile);
+      const onboarded = localStorage.getItem(`harvest_onboarded_${profile.id}`);
+      setHasCompletedOnboarding(onboarded === "true");
+    } else {
+      // Fallback: build from auth metadata
+      const meta = supabaseUser.user_metadata ?? {};
+      const name = meta.full_name ?? meta.name ?? supabaseUser.email?.split("@")[0] ?? "User";
+      const fallback: User = {
+        id: supabaseUser.id,
+        name,
+        email: supabaseUser.email ?? "",
+        role: "farmer",
+        location: "",
+        avatar: meta.avatar_url ?? name.charAt(0).toUpperCase(),
+        farmingActivities: [],
+        bio: "",
+        followers: 0,
+        following: 0,
+        postsCount: 0,
+        createdAt: new Date().toISOString(),
+        suspended: false,
+      };
+      setCurrentUser(fallback);
+      setUser(fallback);
+    }
+  }, []);
+
+  const refreshUser = useCallback(async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user) {
+      await applySupabaseSession(session.user);
+    }
+  }, [applySupabaseSession]);
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        const localUser = supabaseUserToLocal(session.user);
-        setCurrentUser(localUser);
-        setUser(localUser);
-        const onboarded = localStorage.getItem(`harvest_onboarded_${localUser.id}`);
-        setHasCompletedOnboarding(onboarded === "true");
-      }
+      if (session?.user) applySupabaseSession(session.user);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
-        const localUser = supabaseUserToLocal(session.user);
-        setCurrentUser(localUser);
-        setUser(localUser);
-        const onboarded = localStorage.getItem(`harvest_onboarded_${localUser.id}`);
-        setHasCompletedOnboarding(onboarded === "true");
+        applySupabaseSession(session.user);
       } else if (_event === "SIGNED_OUT") {
         setCurrentUser(null);
         setUser(null);
@@ -86,7 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [applySupabaseSession]);
 
   const login = useCallback((email: string, password: string) => {
     const users = getStore<User & { password: string }>("users");
@@ -108,20 +117,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { success: false, error: "An account with this email already exists" };
     }
     const newUser: User & { password: string } = {
-      id: generateId(),
-      name,
-      email,
-      password,
-      role: "farmer",
-      location: "",
-      avatar: name.charAt(0).toUpperCase(),
-      farmingActivities: [],
-      bio: "",
-      followers: 0,
-      following: 0,
-      postsCount: 0,
-      createdAt: new Date().toISOString(),
-      suspended: false,
+      id: generateId(), name, email, password,
+      role: "farmer", location: "", avatar: name.charAt(0).toUpperCase(),
+      farmingActivities: [], bio: "", followers: 0, following: 0, postsCount: 0,
+      createdAt: new Date().toISOString(), suspended: false,
     };
     users.push(newUser);
     setStore("users", users);
@@ -146,10 +145,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setCurrentUser(updated);
       const users = getStore<User & { password?: string }>("users");
       const idx = users.findIndex((u) => u.id === updated.id);
-      if (idx !== -1) {
-        users[idx] = { ...users[idx], ...updates };
-        setStore("users", users);
-      }
+      if (idx !== -1) { users[idx] = { ...users[idx], ...updates }; setStore("users", users); }
       return updated;
     });
   }, []);
@@ -157,24 +153,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const setOnboardingComplete = useCallback(() => {
     setHasCompletedOnboarding(true);
     localStorage.setItem("harvest_onboarding_complete", "true");
-    if (user) {
-      localStorage.setItem(`harvest_onboarded_${user.id}`, "true");
-    }
+    if (user) localStorage.setItem(`harvest_onboarded_${user.id}`, "true");
   }, [user]);
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        isAuthenticated,
-        login,
-        signup,
-        logout,
-        updateUser,
-        hasCompletedOnboarding,
-        setOnboardingComplete,
-      }}
-    >
+    <AuthContext.Provider value={{
+      user, isAuthenticated, login, signup, logout,
+      updateUser, hasCompletedOnboarding, setOnboardingComplete, refreshUser,
+    }}>
       {children}
     </AuthContext.Provider>
   );
@@ -182,8 +168,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 export function useAuth() {
   const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error("useAuth must be used within an AuthProvider");
-  }
+  if (!context) throw new Error("useAuth must be used within an AuthProvider");
   return context;
 }
