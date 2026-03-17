@@ -26,7 +26,7 @@ const Login = () => {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     if (!email.trim() || !password.trim()) {
@@ -34,16 +34,13 @@ const Login = () => {
       return;
     }
     setLoading(true);
-    // Simulate async for future Supabase swap
-    setTimeout(() => {
-      const result = login(email.trim(), password);
-      if (result.success) {
-        navigate("/");
-      } else {
-        setError(result.error || "Login failed");
-      }
-      setLoading(false);
-    }, 300);
+    const result = await login(email.trim(), password);
+    if (result.success) {
+      navigate("/");
+    } else {
+      setError(result.error || "Login failed");
+    }
+    setLoading(false);
   };
 
   return (
@@ -54,7 +51,6 @@ const Login = () => {
           animate={{ opacity: 1, y: 0 }}
           className="w-full max-w-sm space-y-8"
         >
-          {/* Logo */}
           <div className="flex flex-col items-center gap-3">
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary">
               <Leaf className="h-8 w-8 text-primary-foreground" />
@@ -65,12 +61,10 @@ const Login = () => {
             </div>
           </div>
 
-          {/* Google sign-in */}
           <button
             type="button"
             onClick={handleGoogleSignIn}
             disabled={googleLoading}
-            data-testid="button-google-signin"
             className="flex w-full items-center justify-center gap-3 rounded-xl border-2 border-border bg-card px-4 py-3 text-sm font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-60"
           >
             {googleLoading ? (
@@ -92,7 +86,6 @@ const Login = () => {
             <div className="h-px flex-1 bg-border" />
           </div>
 
-          {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
             {error && (
               <div className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">

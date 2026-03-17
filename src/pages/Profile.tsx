@@ -54,15 +54,15 @@ const Profile = () => {
           {isAuthenticated && (
             <div className="mt-4 grid grid-cols-3 gap-3 border-t pt-4">
               <div className="text-center">
-                <p className="text-lg font-bold text-foreground">{user?.postsCount || 0}</p>
+                <p className="text-lg font-bold text-foreground">0</p>
                 <p className="text-[11px] text-muted-foreground">Posts</p>
               </div>
               <div className="text-center">
-                <p className="text-lg font-bold text-foreground">{user?.followers || 0}</p>
+                <p className="text-lg font-bold text-foreground">0</p>
                 <p className="text-[11px] text-muted-foreground">Followers</p>
               </div>
               <div className="text-center">
-                <p className="text-lg font-bold text-foreground">{user?.following || 0}</p>
+                <p className="text-lg font-bold text-foreground">0</p>
                 <p className="text-[11px] text-muted-foreground">Following</p>
               </div>
             </div>

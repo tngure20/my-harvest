@@ -4,6 +4,7 @@ import { Leaf, Eye, EyeOff, Mail, Lock, User } from "lucide-react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
 import { signInWithGoogle } from "@/services/supabaseClient";
+import { toast } from "sonner";
 
 const Signup = () => {
   const navigate = useNavigate();
@@ -28,7 +29,7 @@ const Signup = () => {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
@@ -46,15 +47,14 @@ const Signup = () => {
     }
 
     setLoading(true);
-    setTimeout(() => {
-      const result = signup(email.trim(), password, name.trim());
-      if (result.success) {
-        navigate("/onboarding");
-      } else {
-        setError(result.error || "Signup failed");
-      }
-      setLoading(false);
-    }, 300);
+    const result = await signup(email.trim(), password, name.trim());
+    if (result.success) {
+      toast.success("Account created! Check your email to confirm.");
+      navigate("/onboarding");
+    } else {
+      setError(result.error || "Signup failed");
+    }
+    setLoading(false);
   };
 
   return (
@@ -75,12 +75,10 @@ const Signup = () => {
             </div>
           </div>
 
-          {/* Google sign-up */}
           <button
             type="button"
             onClick={handleGoogleSignUp}
             disabled={googleLoading}
-            data-testid="button-google-signup"
             className="flex w-full items-center justify-center gap-3 rounded-xl border-2 border-border bg-card px-4 py-3 text-sm font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-60"
           >
             {googleLoading ? (
