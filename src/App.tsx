@@ -4,10 +4,10 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/contexts/AuthContext";
-import { initializeApp } from "@/lib/dataService";
 import Index from "./pages/Index";
 import Marketplace from "./pages/Marketplace";
 import Community from "./pages/Community";
+import CommunityDetail from "./pages/CommunityDetail";
 import Toolkit from "./pages/Toolkit";
 import FarmManagement from "./pages/FarmManagement";
 import FarmAssistant from "./pages/FarmAssistant";
@@ -23,6 +23,7 @@ import Experts from "./pages/Experts";
 import AdminLogin from "./pages/AdminLogin";
 import AdminDashboard from "./pages/AdminDashboard";
 import NotFound from "./pages/NotFound";
+import { initializeApp } from "@/lib/dataService";
 
 initializeApp();
 
@@ -40,6 +41,7 @@ const App = () => {
               <Route path="/" element={<Index />} />
               <Route path="/marketplace" element={<Marketplace />} />
               <Route path="/community" element={<Community />} />
+              <Route path="/community/:id" element={<CommunityDetail />} />
               <Route path="/toolkit" element={<Toolkit />} />
               <Route path="/farm" element={<FarmManagement />} />
               <Route path="/assistant" element={<FarmAssistant />} />

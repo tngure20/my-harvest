@@ -28,12 +28,25 @@ src/
   services/
     supabaseClient.ts  # Supabase client + signInWithGoogle() helper
     profileService.ts  # User profile sync
+    socialService.ts   # Supabase social data layer (posts, reactions, comments, communities, media)
+    aiService.ts       # AI farm assistant with fallback knowledge base
+    newsService.ts     # Location-aware agri news (4-tier: county→national→regional→global)
   lib/
-    dataService.ts     # Seed/init data + local User type
-    agricultureKnowledge.ts  # AI knowledge base
+    dataService.ts     # localStorage CRUD still used by marketplace, farm, admin features
+    agricultureKnowledge.ts  # AI knowledge base fallback
     utils.ts
   hooks/               # Custom React hooks
 ```
+
+## Social / Community Features (Supabase-backed)
+Tables: `posts`, `post_reactions`, `post_comments`, `communities`, `community_members`
+- SQL migration: `supabase/social_schema.sql` — run once in Supabase SQL editor
+- Storage bucket: `post-media` (public, 10 MB limit, image/video)
+- Database triggers auto-maintain `like_count`, `dislike_count`, `comment_count`, `member_count`
+- RLS policies: readable by all, mutations only by authenticated owners
+- Routes: `/community` (feed + community cards), `/community/:id` (community detail page)
+- Components: `PostCard`, `CreatePostSheet`, `CreateCommunitySheet`, `SocialFeed` (home widget)
+- All social data flows through `src/services/socialService.ts`
 
 ## Environment Variables (set as shared env vars)
 - `VITE_SUPABASE_URL` = https://gciybjlwambconeyhigk.supabase.co

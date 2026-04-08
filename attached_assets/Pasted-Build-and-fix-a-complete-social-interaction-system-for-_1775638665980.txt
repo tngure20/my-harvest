@@ -1,0 +1,40 @@
+Build and fix a complete social interaction system for an agriculture-based platform. The goal is to create a clean, intuitive, and fully functional experience where users can create posts, interact with content, and form communities. The system must be simple for users but properly structured under the hood to ensure scalability, performance, and data consistency.
+
+Start by fixing the core issue: posting is currently unreliable or not fully connected to the backend. Ensure that users can successfully create posts that are stored in the database and immediately reflected in the UI. Each post must be tied to an authenticated user using a user_id. Posts should support text content, images, and videos. Media uploads must be handled properly, either through Supabase storage or a similar service, and the resulting URLs should be stored in the posts table.
+
+The post creation flow should feel smooth and responsive. When a user submits a post, it should instantly appear in the feed without requiring a full page reload. Implement optimistic UI updates where appropriate, but ensure proper error handling in case the database operation fails. If an error occurs, the user should receive clear feedback instead of silent failure.
+
+Each post in the feed should display the following: user information (name and avatar), content (text and media), timestamp, and interaction buttons. These interaction buttons must include like, dislike, comment, and share. The buttons should be clearly visible, intuitive, and responsive.
+
+For likes and dislikes, implement a toggle system. A user should only be able to either like or dislike a post, not both at the same time. If they click like again, it should remove their like. The same applies to dislikes. Store these interactions in a dedicated table (such as reactions) with fields for user_id, post_id, and type (like or dislike). Enforce uniqueness so a user cannot create duplicate reactions on the same post. Update the UI in real time to reflect the current state of the user’s interaction.
+
+Comments must be fully functional and connected to posts. Users should be able to add comments under each post, and those comments should be stored in the database with references to both the post and the user. Display comments in a structured way beneath each post. Keep the initial implementation simple by avoiding nested replies, but design the schema in a way that allows future expansion. Comments should load efficiently and not block the main feed.
+
+Sharing functionality should be implemented in a basic but extensible way. When a user clicks share, allow them to either repost the content within the platform or copy a link to the post. For now, focus on internal sharing (reposting). A shared post should retain a reference to the original post and display attribution to the original creator. Avoid duplicating full content unnecessarily; instead, reference the original post where possible.
+
+Next, expand the community system. Users should have the option to either post as individuals or within a community/group. Introduce a communities table where users can create and manage groups. Each community should have a name, description, creator (user_id), and optional image. Users should be able to join or leave communities.
+
+Modify the posts system to support community-based posting. Add an optional community_id field to the posts table. If this field is present, the post belongs to a specific community; if not, it is a general post. In the UI, clearly distinguish between general posts and community posts. Allow users to filter their feed by communities they belong to.
+
+Create a simple community page where users can view posts within that community, see basic details, and interact with content just like in the main feed. Community creation should be straightforward, with minimal required fields. Avoid overcomplicating permissions at this stage; focus on core functionality first.
+
+Ensure that all data interactions are properly connected to Supabase. Use a centralized service layer (such as socialService.ts) to handle all database operations, including creating posts, fetching posts, adding comments, and managing reactions. Do not place database logic directly inside UI components. Maintain a clean separation between UI and data logic.
+
+Implement proper Row Level Security (RLS) policies across all relevant tables. Users should only be able to create, update, or delete their own content, while read access can remain public for posts and comments. Ensure that all queries respect these policies and do not silently fail.
+
+Improve error handling throughout the system. Any failure in creating posts, comments, or reactions should be clearly communicated to the user באמצעות UI feedback such as toast notifications or alerts. Avoid relying solely on console logs.
+
+Optimize data fetching for performance. Do not overload a single query with deeply nested relationships. Fetch posts efficiently and load related data (such as comments or reactions) in a controlled manner. Consider lazy loading or pagination for large datasets.
+
+Finally, ensure the UI is clean and consistent. Interaction buttons should be aligned and easy to understand. The posting interface should be accessible and not hidden. Remove any floating or misplaced elements (such as a globally floating login button) and place them in appropriate locations like headers or dedicated pages.
+
+The final result should be a fully working social layer where users can:
+
+Create posts with text, images, and videos
+Like, dislike, comment, and share posts
+See updates reflected instantly
+Join or create communities
+Post either publicly or within a community
+Interact with a stable and responsive feed
+
+Focus on simplicity, reliability, and clean architecture. Avoid overengineering, but ensure the system is structured well enough to support future growth.
