@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import AppLayout from "@/components/AppLayout";
-import { Users, Plus, LogIn, RefreshCw, TrendingUp, Filter } from "lucide-react";
+import { Users, Plus, LogIn, RefreshCw, TrendingUp, Pencil, ImageIcon } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
@@ -16,6 +16,18 @@ import EmptyState from "@/components/ui/EmptyState";
 
 const PAGE_SIZE = 15;
 
+// ─── Avatar helper ────────────────────────────────────────────────────────────
+function Avatar({ src, name }: { src: string; name: string }) {
+  const isUrl = src.startsWith("http");
+  if (isUrl) return <img src={src} alt={name} className="h-9 w-9 rounded-full object-cover" />;
+  return (
+    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
+      {src}
+    </div>
+  );
+}
+
+// ─── Community card ───────────────────────────────────────────────────────────
 const CommunityCard = ({
   c, onJoin, onOpen,
 }: {
@@ -25,14 +37,13 @@ const CommunityCard = ({
 }) => (
   <motion.div
     initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-    className="harvest-card cursor-pointer overflow-hidden flex-shrink-0 w-48"
+    className="harvest-card cursor-pointer overflow-hidden flex-shrink-0 w-44"
     onClick={() => onOpen(c.id)}
   >
-    {c.imageUrl && (
+    {c.imageUrl ? (
       <img src={c.imageUrl} alt={c.name} className="h-20 w-full object-cover bg-muted"
         onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
-    )}
-    {!c.imageUrl && (
+    ) : (
       <div className="h-20 w-full bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center">
         <Users className="h-8 w-8 text-primary/40" />
       </div>
@@ -54,6 +65,50 @@ const CommunityCard = ({
   </motion.div>
 );
 
+// ─── Compose bar ──────────────────────────────────────────────────────────────
+const ComposeBar = ({
+  user, onOpen,
+}: {
+  user: { name: string; avatar: string } | null;
+  onOpen: () => void;
+}) => (
+  <motion.div
+    initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+    className="harvest-card p-3"
+  >
+    {user ? (
+      <div className="flex items-center gap-3">
+        <Avatar src={user.avatar} name={user.name} />
+        <button
+          onClick={onOpen}
+          className="flex-1 rounded-full border bg-muted/50 px-4 py-2.5 text-left text-sm text-muted-foreground hover:bg-muted transition-colors"
+        >
+          What's on your mind?
+        </button>
+        <button
+          onClick={onOpen}
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+        >
+          <ImageIcon className="h-4 w-4" />
+        </button>
+      </div>
+    ) : (
+      <div className="flex items-center gap-3">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted">
+          <Users className="h-4 w-4 text-muted-foreground" />
+        </div>
+        <button
+          onClick={onOpen}
+          className="flex-1 rounded-full border bg-muted/50 px-4 py-2.5 text-left text-sm text-muted-foreground hover:bg-muted transition-colors"
+        >
+          Sign in to share with the community
+        </button>
+      </div>
+    )}
+  </motion.div>
+);
+
+// ─── Main page ────────────────────────────────────────────────────────────────
 const Community = () => {
   const { user, isAuthenticated } = useAuth();
   const navigate = useNavigate();
@@ -86,18 +141,23 @@ const Community = () => {
       ]);
 
       if (reset) setCommunities(comms);
-
       setPosts(prev => reset ? newPosts : [...prev, ...newPosts]);
       setHasMore(newPosts.length === PAGE_SIZE);
-    } catch (err) {
+    } catch {
       toast.error("Could not load posts. Check your connection.");
     } finally {
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [activeCommunityFilter, posts.length, communities]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeCommunityFilter]);
 
   useEffect(() => { load(true); }, [activeCommunityFilter]);
+
+  const handleComposeClick = () => {
+    if (!isAuthenticated) { navigate("/login"); return; }
+    setShowCreate(true);
+  };
 
   const handleJoin = async (communityId: string, isMember: boolean) => {
     if (!isAuthenticated) { navigate("/login"); return; }
@@ -131,43 +191,25 @@ const Community = () => {
     ? posts.filter(p => p.communityId && myCommunities.some(c => c.id === p.communityId))
     : posts;
 
-  const postsByCommunityFilter = activeCommunityFilter
-    ? posts.filter(p => p.communityId === activeCommunityFilter)
-    : posts;
-
   return (
     <AppLayout>
-      <div className="px-4 py-4 space-y-5">
-        {/* Header */}
+      <div className="px-4 py-4 space-y-5 pb-28">
+        {/* ── Page header ─────────────────────────────────── */}
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold text-foreground">Community</h1>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => load(true)}
-              disabled={loading}
-              className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:bg-muted disabled:opacity-40"
-            >
-              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-            </button>
-            {isAuthenticated ? (
-              <button
-                onClick={() => setShowCreate(true)}
-                className="flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
-              >
-                <Plus className="h-4 w-4" /> Post
-              </button>
-            ) : (
-              <button
-                onClick={() => navigate("/login")}
-                className="flex items-center gap-1.5 rounded-full border px-4 py-2 text-sm font-medium hover:bg-muted"
-              >
-                <LogIn className="h-4 w-4" /> Sign in
-              </button>
-            )}
-          </div>
+          <button
+            onClick={() => load(true)}
+            disabled={loading}
+            className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:bg-muted disabled:opacity-40"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+          </button>
         </div>
 
-        {/* Communities horizontal scroll */}
+        {/* ── Compose bar ─────────────────────────────────── */}
+        <ComposeBar user={user} onOpen={handleComposeClick} />
+
+        {/* ── Communities horizontal scroll ────────────────── */}
         <div>
           <div className="flex items-center justify-between mb-3">
             <h2 className="harvest-section-title">Communities</h2>
@@ -176,17 +218,27 @@ const Community = () => {
                 onClick={() => setShowCreateCommunity(true)}
                 className="flex items-center gap-1 text-xs font-medium text-primary hover:underline"
               >
-                <Plus className="h-3 w-3" /> New
+                <Plus className="h-3 w-3" /> Create
               </button>
             )}
           </div>
 
           {communities.length === 0 && !loading ? (
             <div className="harvest-card p-4 text-center">
-              <p className="text-xs text-muted-foreground">No communities yet.</p>
-              {isAuthenticated && (
-                <button onClick={() => setShowCreateCommunity(true)} className="mt-2 text-xs font-medium text-primary">
-                  Create the first one →
+              <p className="text-sm text-muted-foreground mb-2">No communities yet.</p>
+              {isAuthenticated ? (
+                <button
+                  onClick={() => setShowCreateCommunity(true)}
+                  className="rounded-full bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground"
+                >
+                  + Create the first community
+                </button>
+              ) : (
+                <button
+                  onClick={() => navigate("/login")}
+                  className="text-xs font-medium text-primary"
+                >
+                  Sign in to create communities →
                 </button>
               )}
             </div>
@@ -204,7 +256,7 @@ const Community = () => {
           )}
         </div>
 
-        {/* Feed header + filter */}
+        {/* ── Feed section ─────────────────────────────────── */}
         <div>
           <div className="flex items-center gap-3 mb-3">
             <TrendingUp className="h-5 w-5 text-primary" />
@@ -225,7 +277,7 @@ const Community = () => {
                     filter === "my-communities" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground"
                   }`}
                 >
-                  My Communities
+                  Mine
                 </button>
               </div>
             )}
@@ -237,7 +289,9 @@ const Community = () => {
               <button
                 onClick={() => setActiveCommunityFilter(null)}
                 className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors border ${
-                  !activeCommunityFilter ? "bg-primary text-primary-foreground border-primary" : "bg-card text-foreground border-border hover:bg-muted"
+                  !activeCommunityFilter
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-card text-foreground border-border hover:bg-muted"
                 }`}
               >
                 All Posts
@@ -247,7 +301,9 @@ const Community = () => {
                   key={c.id}
                   onClick={() => setActiveCommunityFilter(activeCommunityFilter === c.id ? null : c.id)}
                   className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors border ${
-                    activeCommunityFilter === c.id ? "bg-primary text-primary-foreground border-primary" : "bg-card text-foreground border-border hover:bg-muted"
+                    activeCommunityFilter === c.id
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-card text-foreground border-border hover:bg-muted"
                   }`}
                 >
                   📌 {c.name}
@@ -256,7 +312,7 @@ const Community = () => {
             </div>
           )}
 
-          {/* Posts list */}
+          {/* Posts */}
           {loading ? (
             <div className="space-y-4">
               {[0, 1, 2].map(i => (
@@ -280,11 +336,11 @@ const Community = () => {
               description={
                 activeCommunityFilter
                   ? "No posts in this community yet. Be the first!"
-                  : "Be the first to share tips, ask questions, or start a discussion."
+                  : "Share a tip, ask a question, or start a discussion with fellow farmers."
               }
               action={
                 isAuthenticated
-                  ? { label: "Create First Post", onClick: () => setShowCreate(true) }
+                  ? { label: "Write the first post", onClick: handleComposeClick }
                   : { label: "Sign in to post", onClick: () => navigate("/login") }
               }
             />
@@ -309,15 +365,25 @@ const Community = () => {
                   disabled={loadingMore}
                   className="w-full rounded-xl border bg-card py-3 text-sm font-medium text-muted-foreground hover:bg-muted transition-colors flex items-center justify-center gap-2"
                 >
-                  {loadingMore
-                    ? <><span className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" /> Loading...</>
-                    : "Load more posts"}
+                  {loadingMore ? (
+                    <><span className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" /> Loading...</>
+                  ) : "Load more posts"}
                 </button>
               )}
             </div>
           )}
         </div>
       </div>
+
+      {/* ── Floating action button ──────────────────────────── */}
+      <motion.button
+        initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.4, type: "spring" }}
+        onClick={handleComposeClick}
+        className="fixed bottom-20 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-primary shadow-lg shadow-primary/30 hover:bg-primary/90 active:scale-95 transition-transform"
+        aria-label="Create post"
+      >
+        <Pencil className="h-6 w-6 text-primary-foreground" />
+      </motion.button>
 
       <CreatePostSheet
         open={showCreate}

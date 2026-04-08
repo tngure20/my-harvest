@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import AppLayout from "@/components/AppLayout";
-import { ArrowLeft, Users, Plus, RefreshCw } from "lucide-react";
+import { ArrowLeft, Users, Plus, RefreshCw, Pencil } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
@@ -98,7 +98,7 @@ const CommunityDetail = () => {
         </button>
       </div>
 
-      <div className="px-4 py-4 space-y-4">
+      <div className="px-4 py-4 space-y-4 pb-28">
         {/* Community hero card */}
         {community && (
           <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="harvest-card overflow-hidden">
@@ -207,12 +207,29 @@ const CommunityDetail = () => {
         </div>
       </div>
 
+      {/* Floating action button */}
+      <motion.button
+        initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.3, type: "spring" }}
+        onClick={() => {
+          if (!isAuthenticated) { navigate("/login"); return; }
+          if (community && !community.isMember) {
+            toast("Join this community first to post here.");
+            return;
+          }
+          setShowCreate(true);
+        }}
+        className="fixed bottom-20 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-primary shadow-lg shadow-primary/30 hover:bg-primary/90 active:scale-95 transition-transform"
+        aria-label="Create post"
+      >
+        <Pencil className="h-6 w-6 text-primary-foreground" />
+      </motion.button>
+
       {community && (
         <CreatePostSheet
           open={showCreate}
           onClose={() => setShowCreate(false)}
           onCreated={handlePostCreated}
-          communities={community ? [community] : []}
+          communities={[community]}
           defaultCommunityId={community.id}
         />
       )}
