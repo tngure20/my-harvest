@@ -23,7 +23,7 @@ export interface AIRequest {
   mode: AssistantMode;
   query: string;
   userId?: string;
-  farmActivities?: FarmActivity[];
+  farmActivities?: FarmRecord[];
 }
 
 export interface AIResponse {
@@ -34,7 +34,7 @@ export interface AIResponse {
 
 // ─── System prompt builder ────────────────────────────────────────────────────
 
-function buildSystemPrompt(mode: AssistantMode, farmActivities?: FarmActivity[]): string {
+function buildSystemPrompt(mode: AssistantMode, farmActivities?: FarmRecord[]): string {
   const modeInstructions: Record<AssistantMode, string> = {
     advice: `You are a knowledgeable agricultural advisor specializing in East African farming.
 Answer questions about crops, livestock, soil health, irrigation, pest management, and general farming.
@@ -60,8 +60,8 @@ Provide concrete schedules and timelines.`,
 
   const farmContext =
     farmActivities && farmActivities.length > 0
-      ? `\n\nFarmer's current farm activities:\n${farmActivities
-          .map((a) => `- ${a.name} (${a.type}${a.species ? ` / ${a.species}` : ""}) at ${a.location || "unspecified location"}`)
+      ? `\n\nFarmer's current farm records:\n${farmActivities
+          .map((a) => `- ${a.name} (${a.recordType}${a.cropType ? ` / ${a.cropType}` : ""}) — ${a.healthStatus}`)
           .join("\n")}`
       : "";
 
@@ -90,7 +90,7 @@ Always end responses with a brief disclaimer about consulting local extension of
 
 // ─── Daily tips prompt ────────────────────────────────────────────────────────
 
-export function buildDailyTipsQuery(farmActivities?: FarmActivity[]): string {
+export function buildDailyTipsQuery(farmActivities?: FarmRecord[]): string {
   const month = new Date().toLocaleString("en-KE", { month: "long" });
   const activities =
     farmActivities && farmActivities.length > 0
@@ -101,17 +101,14 @@ export function buildDailyTipsQuery(farmActivities?: FarmActivity[]): string {
 
 // ─── Farm analysis prompt ─────────────────────────────────────────────────────
 
-export function buildFarmAnalysisQuery(farmActivities: FarmActivity[]): string {
+export function buildFarmAnalysisQuery(farmActivities: FarmRecord[]): string {
   if (farmActivities.length === 0) {
-    return "I haven't added any farm activities yet. What should I start tracking to improve my farm management?";
+    return "I haven't added any farm records yet. What should I start tracking to improve my farm management?";
   }
   const summary = farmActivities
-    .map((a) => {
-      const pendingTasks = a.tasks?.filter((t) => !t.completed).length ?? 0;
-      return `${a.name} (${a.type}${a.species ? `/${a.species}` : ""}) — ${pendingTasks} pending tasks`;
-    })
+    .map((a) => `${a.name} (${a.recordType}${a.cropType ? `/${a.cropType}` : ""}) — health: ${a.healthStatus}`)
     .join("; ");
-  return `Analyze my farm and give me a priority action plan. My activities: ${summary}. What should I focus on this week and what risks should I watch for?`;
+  return `Analyze my farm and give me a priority action plan. My records: ${summary}. What should I focus on this week and what risks should I watch for?`;
 }
 
 // ─── OpenAI-compatible API call ───────────────────────────────────────────────
