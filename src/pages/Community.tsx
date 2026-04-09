@@ -193,7 +193,7 @@ const Community = () => {
 
   return (
     <AppLayout>
-      <div className="px-4 py-4 space-y-5 pb-28">
+      <div className="px-4 py-4 space-y-5 pb-28 lg:pb-8">
         {/* ── Page header ─────────────────────────────────── */}
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold text-foreground">Community</h1>
@@ -379,7 +379,7 @@ const Community = () => {
       <motion.button
         initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.4, type: "spring" }}
         onClick={handleComposeClick}
-        className="fixed bottom-20 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-primary shadow-lg shadow-primary/30 hover:bg-primary/90 active:scale-95 transition-transform"
+        className="fixed bottom-20 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-primary shadow-lg shadow-primary/30 hover:bg-primary/90 active:scale-95 transition-transform lg:bottom-6 lg:right-8"
         aria-label="Create post"
       >
         <Pencil className="h-6 w-6 text-primary-foreground" />

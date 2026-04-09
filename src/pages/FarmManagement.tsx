@@ -422,7 +422,7 @@ const FarmManagement = () => {
 
   return (
     <AppLayout>
-      <div className="space-y-5 px-4 py-4 pb-28">
+      <div className="space-y-5 px-4 py-4 pb-28 lg:pb-8">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
@@ -601,7 +601,7 @@ const FarmManagement = () => {
       <motion.button
         onClick={() => setShowCreateRecord(true)}
         whileTap={{ scale: 0.92 }}
-        className="fixed bottom-20 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-primary shadow-lg text-primary-foreground"
+        className="fixed bottom-20 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-primary shadow-lg text-primary-foreground lg:bottom-6 lg:right-8"
       >
         <Plus className="h-6 w-6" />
       </motion.button>
