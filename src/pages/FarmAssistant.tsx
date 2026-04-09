@@ -330,7 +330,7 @@ const FarmAssistant = () => {
                   <p className="mb-2 text-xs font-medium text-muted-foreground">From your farm:</p>
                   <div className="flex flex-wrap gap-2">
                     {farmRecords.map(a => (
-                      <button key={a.id} onClick={() => handleSend(`Give me advice for my ${a.species || a.type} (${a.name})`)}
+                      <button key={a.id} onClick={() => handleSend(`Give me advice for my ${a.cropType || a.recordType} (${a.name})`)}
                         className="rounded-full border bg-card px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted">
                         {a.name}
                       </button>
