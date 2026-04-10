@@ -1,25 +1,13 @@
 import { useEffect, useState } from "react";
-import { askAI, buildDailyTipsQuery } from "@/services/aiService";
+import { askAI } from "@/services/aiService";
+import type { NormalizedAIResponse, AIAlert } from "@/services/aiService";
 import { fetchFarmRecords } from "@/services/farmService";
 import type { FarmRecord } from "@/services/farmService";
 
-interface Task {
-  id: string;
-  title: string;
-  priority: "low" | "medium" | "high";
-  due_date?: string;
-}
-
-interface Alert {
-  level: "low" | "medium" | "high";
-  message: string;
-}
-
 export default function TodayDashboard() {
   const [loading, setLoading] = useState(true);
-  const [tips, setTips] = useState("");
+  const [aiResult, setAiResult] = useState<NormalizedAIResponse | null>(null);
   const [farmRecords, setFarmRecords] = useState<FarmRecord[]>([]);
-  const [alerts, setAlerts] = useState<Alert[]>([]);
 
   useEffect(() => {
     loadDashboard();
@@ -27,59 +15,52 @@ export default function TodayDashboard() {
 
   async function loadDashboard() {
     setLoading(true);
-
     try {
-      // 1. Load farm data
       const records = await fetchFarmRecords();
       setFarmRecords(records);
 
-      // 2. Get AI daily tips
       const ai = await askAI({
-  mode: "general",
-  query: "What should I focus on today on my farm?",
-  farmRecords: records,
-});
+        mode: "general",
+        query: "What should I focus on today on my farm?",
+        farmRecords: records,
+      });
 
-      setTips(ai.content);
-
-      // 3. Extract alerts if AI returns them (future-ready)
-      if (ai.alerts) {
-        setAlerts(ai.alerts);
-      }
+      setAiResult(ai);
     } catch (err) {
       console.error("Dashboard error:", err);
     }
-
     setLoading(false);
   }
 
   if (loading) {
     return (
-      <div className="p-4 text-sm text-gray-500">
-        Loading today’s farm overview...
+      <div className="p-4 text-sm text-muted-foreground">
+        Loading today's farm overview...
       </div>
     );
   }
 
   return (
     <div className="p-4 space-y-6">
-
-      {/* HEADER */}
       <div>
-        <h1 className="text-xl font-bold">Today’s Farm Plan</h1>
-        <p className="text-sm text-gray-500">
-          Simple actions for today
-        </p>
+        <h1 className="text-xl font-bold">Today's Farm Plan</h1>
+        <p className="text-sm text-muted-foreground">Simple actions for today</p>
       </div>
 
       {/* ALERTS */}
-      {alerts.length > 0 && (
+      {aiResult && aiResult.alerts.length > 0 && (
         <div className="space-y-2">
           <h2 className="font-semibold">Alerts</h2>
-          {alerts.map((a, i) => (
+          {aiResult.alerts.map((a, i) => (
             <div
               key={i}
-              className="p-3 rounded-lg bg-red-50 text-red-700 text-sm"
+              className={`p-3 rounded-lg text-sm ${
+                a.level === "high"
+                  ? "bg-destructive/10 text-destructive"
+                  : a.level === "medium"
+                    ? "bg-amber-50 text-amber-700"
+                    : "bg-muted text-muted-foreground"
+              }`}
             >
               {a.message}
             </div>
@@ -90,31 +71,34 @@ export default function TodayDashboard() {
       {/* AI TIPS */}
       <div>
         <h2 className="font-semibold mb-2">AI Recommendations</h2>
-        <div className="p-3 rounded-lg bg-green-50 text-sm whitespace-pre-line">
-          {tips}
+        <div className="p-3 rounded-lg bg-primary/5 text-sm whitespace-pre-line">
+          {aiResult?.summary || "No tips available."}
         </div>
       </div>
+
+      {/* ACTIONS FROM AI */}
+      {aiResult && aiResult.actions.length > 0 && (
+        <div>
+          <h2 className="font-semibold mb-2">Suggested Actions</h2>
+          <ul className="space-y-1">
+            {aiResult.actions.map((a, i) => (
+              <li key={i} className="text-sm flex items-center gap-2">
+                <span className={`w-2 h-2 rounded-full ${a.priority === "high" ? "bg-destructive" : a.priority === "medium" ? "bg-amber-500" : "bg-primary"}`} />
+                {a.title}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* QUICK ACTIONS */}
       <div>
         <h2 className="font-semibold mb-2">Quick Actions</h2>
-
         <div className="grid grid-cols-2 gap-2">
-          <button className="p-3 bg-blue-600 text-white rounded-lg">
-            Scan Plant
-          </button>
-
-          <button className="p-3 bg-green-600 text-white rounded-lg">
-            Add Record
-          </button>
-
-          <button className="p-3 bg-purple-600 text-white rounded-lg">
-            Ask AI
-          </button>
-
-          <button className="p-3 bg-gray-800 text-white rounded-lg">
-            Add Task
-          </button>
+          <button className="p-3 bg-primary text-primary-foreground rounded-lg min-h-[44px]">Scan Plant</button>
+          <button className="p-3 bg-primary text-primary-foreground rounded-lg min-h-[44px]">Add Record</button>
+          <button className="p-3 bg-secondary text-secondary-foreground rounded-lg min-h-[44px]">Ask AI</button>
+          <button className="p-3 bg-muted text-foreground rounded-lg min-h-[44px]">Add Task</button>
         </div>
       </div>
     </div>

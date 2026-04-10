@@ -9,7 +9,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { type AssistantMode, type GuidanceResponse, type KnowledgeSource } from "@/lib/agricultureKnowledge";
-import { askAI, buildDailyTipsQuery } from "@/services/aiService";
+import { askAI, buildDailyTipsQuery, buildFarmAnalysisQuery } from "@/services/aiService";
 import { logAIRequest, resolveAIRequest, failAIRequest, uploadFarmMedia } from "@/services/farmService";
 import { fetchFarmRecords, type FarmRecord } from "@/services/farmService";
 import ReactMarkdown from "react-markdown";
@@ -241,7 +241,6 @@ const [farmRecords, setFarmRecords] = useState<FarmRecord[]>([]);
       const response = await askAI({
         mode: hasImage ? "diagnosis" : mode,
         query: aiQuery,
-        userId: user?.id,
         farmRecords,
       });
 
@@ -257,7 +256,7 @@ const [farmRecords, setFarmRecords] = useState<FarmRecord[]>([]);
         id: crypto.randomUUID(),
         role: "assistant",
         content: response.content,
-        guidance: response.guidance,
+        guidance: response.guidance as any,
         source: response.source,
         confidence,
         nextSteps,
@@ -283,7 +282,7 @@ const [farmRecords, setFarmRecords] = useState<FarmRecord[]>([]);
 
   const handleDailyTips = () => {
     setMode("planning");
-    handleSend(buildDailyTipsQuery(farmRecords));
+    handleSend(buildDailyTipsQuery(farmRecords) as string);
   };
 
   const handleFarmAnalysis = () => {
