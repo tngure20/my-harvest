@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import AppLayout from "@/components/AppLayout";
 import WeatherWidget from "@/components/home/WeatherWidget";
 import FarmingAdvice from "@/components/home/FarmingAdvice";
@@ -10,6 +11,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { Leaf, ArrowRight, MapPin } from "lucide-react";
 import { motion } from "framer-motion";
+
 import { runFarmIntelligence } from "@/services/farmIntelligenceService";
 import { fetchFarmRecords } from "@/services/farmService";
 
@@ -36,6 +38,37 @@ const Index = () => {
 
   const primaryType = user?.farmingActivities?.[0];
   const emoji = primaryType ? (farmTypeEmoji[primaryType] ?? "🌾") : "🌾";
+
+  // ─────────────────────────────────────────────
+  // 🧠 FARM BRAIN (runs quietly in background)
+  // ─────────────────────────────────────────────
+  useEffect(() => {
+    if (!isAuthenticated || !user) return;
+
+    let cancelled = false;
+
+    async function runBrain() {
+      try {
+        const records = await fetchFarmRecords();
+
+        if (cancelled) return;
+
+        await runFarmIntelligence(
+          user.id,
+          "Generate today's farm priorities based on weather, season, and farm status",
+          records
+        );
+      } catch (err) {
+        console.warn("Farm brain error:", err);
+      }
+    }
+
+    runBrain();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, user]);
 
   return (
     <AppLayout>
@@ -69,6 +102,7 @@ const Index = () => {
             className="harvest-card overflow-hidden"
           >
             <div className="harvest-gradient p-5">
+
               <div className="flex items-center gap-3 mb-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/20">
                   <Leaf className="h-6 w-6 text-primary-foreground" />
@@ -99,12 +133,13 @@ const Index = () => {
                   Sign In
                 </button>
               </div>
+
             </div>
           </motion.div>
         )}
 
         {/* ========================= */}
-        {/* 🟢 ACTION LAYER (PRIORITY) */}
+        {/* 🟢 ACTION LAYER */}
         {/* ========================= */}
 
         {isAuthenticated && <QuickActions />}
