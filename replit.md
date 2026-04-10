@@ -112,6 +112,8 @@ supabase/              # SQL schema files (run in Supabase SQL editor)
 - Business verified badge on seller cards
 - Listing age indicator ("New listing" or "Listed Xd ago")
 - Location, pricing, availability display
+- No hardcoded seed listings — shows proper EmptyState when no real listings exist
+- One-time purge of legacy "seed-*" fake listings on first load (`purgeSeedData()`)
 
 ### Offline-First & Error Handling
 - localStorage-backed offline task cache with pending sync indicators

@@ -538,28 +538,16 @@ export function searchPlatform(query: string): SearchResult[] {
   return results;
 }
 
-// ─── Initialize seed admin (first run only) ──────────────────────────────────
-// Creates a default admin account if none exists
+// ─── App initialisation ───────────────────────────────────────────────────────
+// Cleans up any legacy hardcoded data from older app versions.
 export function initializeApp() {
-  const users = getStore<User>("users");
-  const hasAdmin = users.some((u) => u.role === "admin");
-  if (!hasAdmin) {
-    const admin: User = {
-      id: "admin-001",
-      name: "Harvest Admin",
-      email: "admin@harvest.app",
-      role: "admin",
-      location: "Nairobi, Kenya",
-      avatar: "HA",
-      farmingActivities: [],
-      bio: "Platform administrator",
-      followers: 0,
-      following: 0,
-      postsCount: 0,
-      createdAt: new Date().toISOString(),
-      suspended: false,
-    };
-    users.push(admin);
-    setStore("users", users);
-  }
+  const PURGE_KEY = "harvest_legacy_admin_purged_v1";
+  if (localStorage.getItem(PURGE_KEY)) return;
+  try {
+    // Remove the previously hardcoded "admin-001" seed account
+    const users = getStore<User>("users");
+    const cleaned = users.filter((u) => u.id !== "admin-001");
+    if (cleaned.length !== users.length) setStore("users", cleaned);
+    localStorage.setItem(PURGE_KEY, "1");
+  } catch {}
 }

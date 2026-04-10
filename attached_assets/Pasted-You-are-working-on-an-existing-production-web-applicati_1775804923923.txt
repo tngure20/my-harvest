@@ -1,0 +1,31 @@
+You are working on an existing production web application called “Harvest,” built with React 18, TypeScript, Vite, Tailwind CSS, shadcn/ui, React Router v6, TanStack React Query, and Supabase for backend services. The application is already deployed and includes modules such as farm management, AI tools, marketplace, and community features.
+
+Your task is to audit, fix, and optimize the entire application to ensure all features, buttons, and user interactions are fully functional, intuitive, and consistent across mobile, tablet, and desktop devices. The focus is on usability, reliability, responsiveness, and removal of all hardcoded or placeholder behavior.
+
+Start by auditing all interactive elements across the application. Ensure every button, link, form submission, and action is properly connected to real logic or backend functionality. There must be no dead buttons, placeholder handlers, or console-only actions. Every interaction should trigger a meaningful result, including navigation, data updates, API calls, or UI feedback.
+
+Remove all hardcoded or mock data currently used in components and replace it with real data fetched from Supabase using React Query. Ensure proper loading states, error states, and empty states are implemented for all data-driven components. The UI should never appear broken or static due to missing data.
+
+Ensure all CRUD operations (create, read, update, delete) work correctly across farm management, tasks, marketplace, and community features. Validate inputs properly and provide clear feedback to users when actions succeed or fail.
+
+Implement fully functional search and filtering systems wherever relevant. This includes marketplace listings, community posts, farm records, and any lists of data. Search inputs must be responsive and efficient, and filters should be intuitive, clearly labeled, and easy to reset. Ensure filtering works correctly with real backend queries and does not rely on frontend-only hacks.
+
+Optimize the user interface for responsiveness across all screen sizes. Use Tailwind’s responsive utilities to ensure layouts adapt correctly for mobile, tablet, and desktop. Fix any layout issues such as overlapping elements, hidden buttons, improper spacing, or components rendering off-screen. Ensure consistent spacing, alignment, and typography across all views.
+
+Ensure all buttons and interactive elements are clearly visible and accessible on every device. Maintain proper touch target sizes for mobile users and ensure buttons are not too small or too close together. Place primary actions in consistent and intuitive positions, such as bottom-fixed action bars on mobile and clearly visible areas on desktop.
+
+Improve navigation for all devices. Implement a clear and consistent navigation system, such as a bottom navigation bar for mobile and a sidebar or top navigation for larger screens. Ensure users can easily access key sections like Dashboard, Farm, AI, Marketplace, and Community without confusion.
+
+Ensure modals, dialogs, and sheets are fully responsive and usable on all devices. They must be properly centered or anchored, scrollable when necessary, and never cut off important content or buttons.
+
+Implement and verify dark mode functionality across the entire application. Ensure a visible and easily accessible toggle for dark mode is present in the UI. All components must support both light and dark themes without visual issues such as unreadable text, poor contrast, or inconsistent styling. Persist the user’s theme preference.
+
+Ensure all forms are easy to use and consistent across devices. Inputs should be clearly labeled, properly spaced, and accessible. Error messages should be visible and helpful. Prevent layout shifts when validation occurs. Ensure submit buttons are always visible and easy to access.
+
+Add proper loading indicators, disabled states, and visual feedback for all asynchronous actions such as data fetching, submissions, and uploads. Users should always understand what the system is doing.
+
+Ensure offline and poor-network scenarios are handled gracefully. Where possible, allow actions such as data entry to be stored locally and synced later. At minimum, ensure the UI does not break when network requests fail.
+
+Test the application thoroughly across different screen sizes and device types. Validate that all features behave consistently and reliably. Ensure performance is optimized by caching data, minimizing unnecessary re-renders, and optimizing media assets.
+
+The final result should be a polished, production-ready application where every button works, every feature is connected to real data, search and filters function correctly, the interface is clean and responsive across all devices, dark mode is fully supported, and the overall experience is intuitive, reliable, and easy to use.

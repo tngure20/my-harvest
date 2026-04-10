@@ -107,65 +107,23 @@ function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): nu
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-// ─── Seed Data ─────────────────────────────────────────────────────────────────
+// ─── One-time cleanup: remove any previously seeded fake listings ──────────────
 
-function seedIfEmpty() {
-  const existing = load<MarketplaceListing>(LISTINGS_KEY);
-  if (existing.length > 0) return;
-
-  const seeds: CreateListingInput[] = [
-    {
-      user_id: "seed-1", seller_name: "Wanjiku Farms", seller_avatar: "W", user_type: "business",
-      title: "Fresh Organic Tomatoes - 50kg Crate", description: "Freshly harvested organic tomatoes from our Kiambu farm. Perfect for retailers and restaurants. Pesticide-free, Grade A quality.",
-      image_urls: ["https://images.unsplash.com/photo-1592924357228-91a4daadcfea?w=600"], price: 3500, unit: "crate",
-      category: "Produce", location_name: "Kiambu, Kenya", latitude: -1.1714, longitude: 36.8356, availability: 20, phone: "+254 712 345 678",
-    },
-    {
-      user_id: "seed-2", seller_name: "John Ochieng", user_type: "individual",
-      title: "Grade A Friesian Heifer - 2 Years", description: "Well-bred Friesian heifer, vaccinated and dewormed. Producing 15L daily. Comes with health certificate.",
-      image_urls: ["https://images.unsplash.com/photo-1570042225831-d98fa7577f1e?w=600"], price: 85000, unit: "head",
-      category: "Livestock", location_name: "Nakuru, Kenya", latitude: -0.3031, longitude: 36.0800, availability: 1, phone: "+254 798 765 432",
-    },
-    {
-      user_id: "seed-3", seller_name: "AgroSupply Ltd", seller_avatar: "A", user_type: "business",
-      title: "DAP Fertilizer 50kg Bags", description: "Genuine DAP fertilizer for planting season. Bulk discounts available for orders above 10 bags.",
-      image_urls: ["https://images.unsplash.com/photo-1416879595882-3373a0480b5b?w=600"], price: 4200, unit: "bag",
-      category: "Fertilizer", location_name: "Eldoret, Kenya", latitude: 0.5143, longitude: 35.2698, availability: 200, phone: "+254 700 111 222", is_featured: true,
-    },
-    {
-      user_id: "seed-4", seller_name: "Mama Njeri", user_type: "individual",
-      title: "Certified Maize Seeds - DK 8031", description: "High-yield certified maize seeds suitable for highland areas. Government-approved variety for the current planting season.",
-      image_urls: ["https://images.unsplash.com/photo-1574323347407-f5e1ad6d020b?w=600"], price: 450, unit: "kg",
-      category: "Seeds", location_name: "Nyeri, Kenya", latitude: -0.4197, longitude: 36.9511, availability: 500,
-    },
-    {
-      user_id: "seed-5", seller_name: "Kamau Machinery", seller_avatar: "K", user_type: "business",
-      title: "Massey Ferguson 240 Tractor", description: "Well-maintained MF 240, 2019 model, low hours. Complete with plough and harrow attachments. Financing available.",
-      image_urls: ["https://images.unsplash.com/photo-1530267981375-f0de937f5f13?w=600"], price: 1800000, unit: "unit",
-      category: "Equipment", location_name: "Nairobi, Kenya", latitude: -1.2921, longitude: 36.8219, availability: 1, phone: "+254 722 333 444", is_featured: true,
-    },
-    {
-      user_id: "seed-6", seller_name: "Grace Mwangi", user_type: "individual",
-      title: "Fresh Avocados - Hass Variety", description: "Export-quality Hass avocados. Ready for harvest. Minimum order 100kg.",
-      image_urls: ["https://images.unsplash.com/photo-1523049673857-eb18f1d80f67?w=600"], price: 120, unit: "kg",
-      category: "Produce", location_name: "Murang'a, Kenya", latitude: -0.7210, longitude: 37.1526, availability: 2000,
-    },
-  ];
-
-  const listings = seeds.map((s) => ({
-    ...s,
-    id: uid(),
-    is_featured: s.is_featured ?? false,
-    created_at: new Date(Date.now() - Math.random() * 7 * 86400000).toISOString(),
-    updated_at: now(),
-  }));
-  save(LISTINGS_KEY, listings);
+function purgeSeedData() {
+  const PURGE_KEY = "harvest_marketplace_seed_purged_v1";
+  if (localStorage.getItem(PURGE_KEY)) return;
+  try {
+    const listings = load<MarketplaceListing>(LISTINGS_KEY);
+    const cleaned = listings.filter((l) => !l.user_id.startsWith("seed-"));
+    save(LISTINGS_KEY, cleaned);
+    localStorage.setItem(PURGE_KEY, "1");
+  } catch {}
 }
 
 // ─── Listings CRUD ─────────────────────────────────────────────────────────────
 
 export function getListings(filters?: ListingFilters): MarketplaceListing[] {
-  seedIfEmpty();
+  purgeSeedData();
   let items = load<MarketplaceListing>(LISTINGS_KEY);
 
   if (filters) {
