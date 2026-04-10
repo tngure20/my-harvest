@@ -176,3 +176,51 @@ export async function askAI(request: AIRequest): Promise<AIResponse> {
     };
   }
 }
+ // ─── DAILY TIPS QUERY ─────────────────────────────────────
+
+export function buildDailyTipsQuery(farmRecords?: FarmRecord[]): string {
+  const month = new Date().toLocaleString("en-KE", { month: "long" });
+
+  const activities =
+    farmRecords?.length
+      ? ` My current farm activities include: ${farmRecords
+          .map((a) => a.name)
+          .join(", ")}.`
+      : "";
+
+  return `Give me 5 practical farming tips for ${month} in Kenya that I should act on this week.${activities} Focus on:
+- seasonal farming tasks
+- pest and disease risks
+- weather-based actions
+- market opportunities
+
+Keep answers short and actionable.`;
+}
+
+// ─── FARM ANALYSIS QUERY ─────────────────────────────────
+
+export function buildFarmAnalysisQuery(farmRecords: FarmRecord[]): string {
+  if (!farmRecords || farmRecords.length === 0) {
+    return "I have no farm records yet. What should I start tracking first to improve farm management?";
+  }
+
+  const summary = farmRecords
+    .map(
+      (a) =>
+        `${a.name} (${a.recordType}${
+          a.cropType ? `/${a.cropType}` : ""
+        }) — health: ${a.healthStatus}`
+    )
+    .join("; ");
+
+  return `Analyze my farm situation and give me a priority action plan for this week.
+
+Farm data:
+${summary}
+
+Tell me:
+- what is urgent
+- what I should fix first
+- risks I should watch
+- simple next steps`;
+}
