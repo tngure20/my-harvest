@@ -82,12 +82,28 @@ function fetchTimeout(url: string, options: RequestInit) {
 }
 
 // ─── TEXT AI ───────────────────────────────────────────
-
 export async function askAI(req: AIRequest): Promise<AIResponse> {
   try {
     if (!endpoint || !apiKey) throw new Error("no_ai");
 
-    const system = buildSystemPrompt(req.mode, req.farmRecords);
+    const system = `
+You are an expert agricultural advisor.
+
+RULES:
+- Be SPECIFIC (mention diseases, nutrients, causes)
+- DO NOT give generic advice
+- Always diagnose if possible
+- Always give step-by-step actions
+- Use farmer-friendly language
+
+RETURN STRICT JSON:
+{
+  "content": "short explanation",
+  "actions": [{"title": "", "priority": "low|medium|high"}],
+  "alerts": [{"level": "low|medium|high", "message": ""}],
+  "confidence": number
+}
+`;
 
     const res = await fetchTimeout(`${endpoint}/chat/completions`, {
       method: "POST",
@@ -101,15 +117,25 @@ export async function askAI(req: AIRequest): Promise<AIResponse> {
           { role: "system", content: system },
           { role: "user", content: req.query },
         ],
+        temperature: 0.3,
       }),
     });
 
     const data = await res.json();
-    const text = data?.choices?.[0]?.message?.content || "";
+    const raw = data?.choices?.[0]?.message?.content || "{}";
+
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      parsed = { content: raw };
+    }
 
     return {
-      content: text,
-      confidence: 0.7,
+      content: parsed.content || "No response",
+      actions: parsed.actions || [],
+      alerts: parsed.alerts || [],
+      confidence: parsed.confidence || 0.6,
       source: "ai-model",
     };
   } catch (e) {
@@ -121,6 +147,7 @@ export async function askAI(req: AIRequest): Promise<AIResponse> {
     };
   }
 }
+
 
 // ─── IMAGE AI (USED BY FARMSCAN) ───────────────────────
 
