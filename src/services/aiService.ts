@@ -20,6 +20,8 @@ export interface AIRequest {
 
 export interface AIResponse {
   content: string;
+  actions?: any[];
+  alerts?: any[];
   guidance?: GuidanceResponse;
   source: "knowledge-base" | "ai-model";
 }
