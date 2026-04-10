@@ -35,10 +35,10 @@ export default function TodayDashboard() {
 
       // 2. Get AI daily tips
       const ai = await askAI({
-        mode: "advice",
-        query: buildDailyTipsQuery(records),
-        farmRecords: records,
-      });
+  mode: "general",
+  query: "What should I focus on today on my farm?",
+  farmRecords: records,
+});
 
       setTips(ai.content);
 
