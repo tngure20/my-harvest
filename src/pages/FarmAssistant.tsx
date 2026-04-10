@@ -154,11 +154,7 @@ const [farmRecords, setFarmRecords] = useState<FarmRecord[]>([]);
       prev.map((m) => m.id === msgId ? { ...m, feedback: fb } : m)
     );
   };
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const sessionIdRef = useRef(crypto.randomUUID());
-
+ 
   useEffect(() => {
     if (isAuthenticated) {
       fetchFarmRecords().then(setFarmRecords).catch(() => {});
