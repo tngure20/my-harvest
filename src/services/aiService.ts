@@ -241,3 +241,37 @@ ${farmRecords
   .map((f) => `${f.name} - ${f.healthStatus}`)
   .join("\n")}`;
 }
+
+// ─── IMAGE + TEXT AI WRAPPER (CRITICAL) ───────────────────
+
+export async function runAI(payload: {
+  mode: "image" | "text";
+  imageUrl?: string;
+  prompt?: string;
+}) {
+  try {
+    const res = await fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-diagnosis`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify(payload),
+      }
+    );
+
+    if (!res.ok) {
+      throw new Error("AI request failed");
+    }
+
+    return await res.json();
+  } catch (err) {
+    console.error("[runAI ERROR]", err);
+
+    return {
+      response: "AI service unavailable. Try again later.",
+    };
+  }
+}
