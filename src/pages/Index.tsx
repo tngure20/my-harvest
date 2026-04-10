@@ -31,7 +31,8 @@ const Index = () => {
 
   return (
     <AppLayout>
-      <div className="space-y-6 px-4 py-4">
+      {/* Resolved: Added responsive padding for larger screens (lg:py-6) */}
+      <div className="space-y-6 px-4 py-4 lg:py-6">
         {/* Header */}
         <div>
           <p className="text-sm text-muted-foreground">

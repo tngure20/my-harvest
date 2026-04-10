@@ -1,0 +1,25 @@
+You are working on an existing responsive web application called “Harvest,” built with React 18, TypeScript, Vite, Tailwind CSS, and shadcn/ui components. The application is already deployed and includes multiple modules such as farm management, AI tools, marketplace, and community features.
+
+Your task is to refine and optimize the entire user interface and interaction layer to ensure the application is fully responsive, consistent, and seamless across all device types, including mobile phones, tablets, and desktop screens. The focus is on usability, layout stability, and ensuring that all interactive elements work reliably and are easy to access.
+
+Start by auditing all pages and components to ensure proper responsive design. Use Tailwind’s responsive utilities to define clear breakpoints for mobile, tablet, and desktop layouts. Ensure that layouts adapt fluidly without overlapping elements, hidden content, or misaligned components. All text must remain readable, and spacing should be consistent across screen sizes.
+
+Ensure that all buttons and interactive elements are clearly visible, properly aligned, and easy to tap or click. Buttons must not be too small, too close together, or placed in hard-to-reach areas on mobile devices. Maintain a minimum touch target size (at least 44x44 pixels) and ensure adequate spacing between elements. Primary actions should be visually distinct and consistently placed across the app.
+
+Standardize button hierarchy and placement. For example, primary actions such as “Save,” “Submit,” or “Scan” should always appear in predictable locations (such as bottom-right or fixed bottom bars on mobile). Secondary actions should be visually less prominent. Avoid placing critical actions in inconsistent or unexpected positions.
+
+Improve navigation across all screen sizes. On mobile devices, implement a bottom navigation bar or a clear menu system for core sections such as Dashboard, Farm, AI, Marketplace, and Community. On larger screens, use sidebars or top navigation where appropriate. Ensure navigation is intuitive and requires minimal effort to switch between sections.
+
+Fix any issues where buttons or components appear off-screen, overlap with other elements, or become inaccessible due to scrolling or layout bugs. Ensure modals, sheets, and dialogs are fully responsive, scrollable when necessary, and properly centered or anchored depending on device type.
+
+Ensure all forms are user-friendly across devices. Inputs should be properly spaced, labels clearly visible, and error messages easy to understand. Prevent layout shifts when validation messages appear. Make sure form submission buttons are always visible and not hidden below the fold without indication.
+
+Audit all interactive flows to ensure that every button and action works as expected. This includes navigation buttons, form submissions, AI actions, uploads, marketplace interactions, and community features. There should be no dead buttons or unresponsive elements. Add loading states, disabled states, and visual feedback for all actions to improve user confidence.
+
+Ensure consistent use of spacing, typography, and component sizing across the app. Avoid cramped layouts on mobile and overly stretched layouts on desktop. Use max-width containers for large screens to maintain readability.
+
+Optimize media handling, including images and videos, so they scale correctly across devices without breaking layout. Ensure uploaded images (such as plant scans) display properly in responsive containers.
+
+Test and refine the application under real-world conditions, including small screens, large screens, and varying network speeds. Ensure the app remains usable and visually stable even on lower-end devices.
+
+The final result should be a clean, intuitive, and responsive interface where all buttons are easy to find and use, all layouts are consistent across devices, and no element feels misplaced, broken, or difficult to interact with. The user should be able to navigate and use the application effortlessly regardless of screen size.

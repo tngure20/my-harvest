@@ -57,7 +57,7 @@ const Marketplace = () => {
   };
 
   return (
-    <AppLayout>
+    <AppLayout wide>
       <div className="px-4 py-4 space-y-4">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -128,7 +128,7 @@ const Marketplace = () => {
             action={!searchQuery && isAuthenticated ? { label: "Post First Listing", onClick: () => setShowCreate(true) } : undefined}
           />
         ) : (
-          <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {listings.map((item, i) => (
               <ListingCard key={item.id} listing={item} index={i} onClick={() => setSelectedListing(item)} />
             ))}

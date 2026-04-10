@@ -6,13 +6,14 @@ interface AppLayoutProps {
   children: ReactNode;
   hideHeader?: boolean;
   hideNav?: boolean;
+  wide?: boolean;
 }
 
-const AppLayout = ({ children, hideHeader, hideNav }: AppLayoutProps) => {
+const AppLayout = ({ children, hideHeader, hideNav, wide }: AppLayoutProps) => {
   return (
     <div className="min-h-screen bg-background">
       {!hideHeader && <AppHeader />}
-      <main className={`mx-auto max-w-4xl ${!hideNav ? "bottom-nav-safe" : ""}`}>
+      <main className={`mx-auto ${wide ? "max-w-6xl" : "max-w-4xl"} ${!hideNav ? "pb-20 lg:pb-4" : ""}`}>
         {children}
       </main>
       {!hideNav && <BottomNav />}
