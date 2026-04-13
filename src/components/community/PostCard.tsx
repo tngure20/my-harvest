@@ -90,9 +90,7 @@ const PostCard = ({ post, onDeleted }: PostCardProps) => {
         await createNotificationSB({
           user_id: post.authorId,
           type: "like",
-          title: "Someone liked your post",
-          message: `${user.name} liked your post`,
-          avatar_url: typeof user.avatar === "string" ? user.avatar : undefined,
+          message: `${user.name} liked your post`,  // no title or avatar_url in DB
         });
       }
     } catch {
@@ -120,14 +118,12 @@ const PostCard = ({ post, onDeleted }: PostCardProps) => {
     setCommentText("");
 
     try {
-      await createComment({ post_id: post.id, author_id: user.id, content: optimisticComment.text });
+      await createComment({ post_id: post.id, user_id: user.id, content: optimisticComment.text });  // user_id not author_id
       if (post.authorId !== user.id) {
         await createNotificationSB({
           user_id: post.authorId,
           type: "comment",
-          title: "New comment on your post",
-          message: `${user.name} commented on your post`,
-          avatar_url: typeof user.avatar === "string" ? user.avatar : undefined,
+          message: `${user.name} commented on your post`,  // no title or avatar_url in DB
         });
       }
       await loadComments();

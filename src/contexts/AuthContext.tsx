@@ -41,16 +41,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isAuthenticated = user !== null;
 
   const applySupabaseSession = useCallback(async (supabaseUser: { id: string; email?: string; user_metadata?: Record<string, string> }) => {
-    // Try to load full profile from Supabase
+    const meta = supabaseUser.user_metadata ?? {};
+    // profiles table has NO avatar_url column — avatar always comes from auth user_metadata
+    const authAvatar = meta.avatar_url || meta.picture || "";
+
     const profile = await fetchProfile(supabaseUser.id);
     if (profile) {
-      setCurrentUser(profile);
-      setUser(profile);
+      // Overlay auth avatar (not stored in DB profiles table)
+      const withAvatar: User = { ...profile, avatar: authAvatar || profile.avatar };
+      setCurrentUser(withAvatar);
+      setUser(withAvatar);
       const onboarded = localStorage.getItem(`harvest_onboarded_${profile.id}`);
       setHasCompletedOnboarding(onboarded === "true");
     } else {
       // Fallback: build from auth metadata
-      const meta = supabaseUser.user_metadata ?? {};
       const name = meta.full_name ?? meta.name ?? supabaseUser.email?.split("@")[0] ?? "User";
       const fallback: User = {
         id: supabaseUser.id,
@@ -58,7 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         email: supabaseUser.email ?? "",
         role: "farmer",
         location: "",
-        avatar: meta.avatar_url ?? name.charAt(0).toUpperCase(),
+        avatar: authAvatar || name.charAt(0).toUpperCase(),
         farmingActivities: [],
         bio: "",
         followers: 0,

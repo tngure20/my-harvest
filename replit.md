@@ -49,18 +49,31 @@ src/
 - `VITE_SUPABASE_ANON_KEY` = (set in shared env)
 - `VITE_GOOGLE_CLIENT_ID` = (set in shared env)
 
-## Supabase SQL Schema
-Run this entire block in Supabase SQL Editor (Project → SQL Editor → New Query):
+## Supabase SQL Schema (actual — matches real DB)
+Run this block in Supabase SQL Editor only for tables that need creating.
+The DB already has many of these tables. Check before running.
+
+### Critical schema facts verified against real DB:
+- `posts.user_id` = author (NOT NULL) — not `author_id`
+- `posts.community_id` = NOT NULL — every post must belong to a community
+- `posts.original_post_id` = self-FK for reposts/shares (not `shared_from_id`)
+- `post_reactions`: columns `(post_id, user_id, type)` — PK is composite (post_id, user_id), NO separate id column; column is `type` not `reaction_type`
+- `comments.user_id` = author (NOT NULL) — `author_id` is nullable secondary field
+- `community_members.created_at` (NOT `joined_at`); NO unique constraint on (user_id, community_id)
+- `communities`: has `image_url`, `creator_id`; NO `emoji`, `is_private`, `members_count` columns
+- `marketplace_listings`: `user_id` (not `seller_id`), `contact_info` (not `phone`), price is numeric; NO `category` or `is_approved`
+- `profiles`: only `country` + `region` for location (not `location`); NO `farming_types`, `avatar_url`, `bio`, `is_suspended`, `onboarding_completed` — avatar comes from auth.users metadata
+- `notifications`: only `message` column; NO `title`, NO `avatar_url`; has `reference_id`
+- `user_blocks` table does NOT exist — block feature is a no-op
 
 ```sql
 -- 1. PROFILES (trigger-created on new auth user)
+-- ACTUAL columns: id, email, full_name, role, country, region, farm_scale, created_at
 create table if not exists profiles (
   id uuid references auth.users on delete cascade primary key,
-  full_name text, email text, avatar_url text,
-  location text, farming_types text[], farm_scale text,
-  bio text, role text default 'farmer',
-  is_suspended boolean default false,
-  onboarding_completed boolean default false,
+  full_name text, email text,
+  role text default 'user',
+  country text, region text, farm_scale text,
   created_at timestamptz default now()
 );
 create or replace function handle_new_user() returns trigger as $$

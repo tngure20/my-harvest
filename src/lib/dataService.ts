@@ -1,6 +1,6 @@
 /**
- * Data Service Layer — types + localStorage fallbacks
- * All Supabase operations live in supabaseService.ts
+ * Data types + localStorage fallbacks.
+ * All column names match the ACTUAL Supabase schema.
  */
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -9,9 +9,9 @@ export interface User {
   id: string;
   name: string;
   email: string;
-  role: "farmer" | "business" | "expert" | "general" | "admin";
-  location: string;
-  avatar: string;
+  role: "farmer" | "business" | "expert" | "general" | "admin" | "user";
+  location: string;       // mapped from profiles.region (or country)
+  avatar: string;         // from auth user_metadata.avatar_url (not in profiles table)
   farmingActivities: string[];
   bio: string;
   followers: number;
@@ -19,54 +19,59 @@ export interface User {
   postsCount: number;
   createdAt: string;
   suspended: boolean;
+  country?: string;
+  region?: string;
+  farmScale?: string;
 }
 
 export interface Post {
   id: string;
-  authorId: string;
+  authorId: string;        // posts.user_id
   authorName: string;
   authorAvatar: string;
   authorLocation: string;
-  text: string;
+  text: string;            // posts.content
   imageUrl?: string;
-  tag: string;
-  likes: number;
-  comments: number;
+  tag?: string;            // not in DB — front-end only label derived from community name
+  likes: number;           // posts.likes_count
+  dislikes: number;        // posts.dislikes_count
+  comments: number;        // posts.comments_count
   createdAt: string;
-  reported: boolean;
-  communityId?: string;
+  isDeleted: boolean;      // posts.is_deleted
+  communityId: string;     // posts.community_id (NOT NULL in DB)
   communityName?: string;
-  sharedFromId?: string;
-  sharedFromAuthorName?: string;
-  sharedFromText?: string;
+  originalPostId?: string; // posts.original_post_id (shares/reposts)
+  originalPostContent?: string;
+  originalPostAuthorName?: string;
+  // legacy compat
+  reported: boolean;
 }
 
 export interface Comment {
   id: string;
   postId: string;
-  authorId: string;
+  authorId: string;       // comments.user_id
   authorName: string;
   authorAvatar: string;
-  text: string;
+  text: string;           // comments.content
   createdAt: string;
+  parentId?: string;      // comments.parent_id (threading)
   reported: boolean;
 }
 
 export interface Reaction {
-  id: string;
   postId: string;
   userId: string;
-  type: "like" | "dislike";
+  type: "like" | "dislike";   // post_reactions.type
 }
 
 export interface Community {
   id: string;
   name: string;
   description: string;
-  emoji: string;
-  creatorId: string;
-  membersCount: number;
-  isPrivate: boolean;
+  imageUrl?: string;           // communities.image_url
+  creatorId: string;           // communities.creator_id
+  membersCount: number;        // computed from community_members count
   createdAt: string;
   memberRole?: "admin" | "member" | null;
 }
@@ -76,7 +81,7 @@ export interface CommunityMember {
   communityId: string;
   userId: string;
   role: "admin" | "member";
-  joinedAt: string;
+  createdAt: string;           // community_members.created_at (NOT joined_at)
   profile?: {
     name: string;
     avatar: string;
@@ -85,7 +90,6 @@ export interface CommunityMember {
 }
 
 export interface UserBlock {
-  id: string;
   blockerId: string;
   blockedId: string;
   createdAt: string;
@@ -93,17 +97,16 @@ export interface UserBlock {
 
 export interface MarketplaceListing {
   id: string;
-  sellerId: string;
+  sellerId: string;       // marketplace_listings.user_id
   sellerName: string;
   title: string;
   description: string;
-  price: string;
+  price: number | null;   // marketplace_listings.price is numeric
   location: string;
-  category: string;
   imageUrl?: string;
-  phone: string;
+  contactInfo: string;    // marketplace_listings.contact_info (not phone)
   createdAt: string;
-  approved: boolean;
+  approved: boolean;      // not in DB — always true
 }
 
 export interface Expert {
@@ -148,11 +151,10 @@ export interface Notification {
   id: string;
   userId: string;
   type: "like" | "comment" | "follow" | "marketplace" | "alert";
-  title: string;
-  message: string;
+  message: string;       // notifications.message (no title in DB)
   read: boolean;
-  avatar?: string;
   createdAt: string;
+  referenceId?: string;  // notifications.reference_id
 }
 
 export interface CommunityGroup {
@@ -199,9 +201,7 @@ function getStore<T>(key: string): T[] {
   try {
     const data = localStorage.getItem(`harvest_${key}`);
     return data ? JSON.parse(data) : [];
-  } catch {
-    return [];
-  }
+  } catch { return []; }
 }
 
 function setStore<T>(key: string, data: T[]) {
@@ -218,26 +218,16 @@ export function getCurrentUser(): User | null {
   try {
     const data = localStorage.getItem("harvest_current_user");
     return data ? JSON.parse(data) : null;
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
 
 export function setCurrentUser(user: User | null) {
-  if (user) {
-    localStorage.setItem("harvest_current_user", JSON.stringify(user));
-  } else {
-    localStorage.removeItem("harvest_current_user");
-  }
+  if (user) localStorage.setItem("harvest_current_user", JSON.stringify(user));
+  else localStorage.removeItem("harvest_current_user");
 }
 
-export function isAdmin(): boolean {
-  return getCurrentUser()?.role === "admin";
-}
-
-export function isLoggedIn(): boolean {
-  return getCurrentUser() !== null;
-}
+export function isAdmin(): boolean { return getCurrentUser()?.role === "admin"; }
+export function isLoggedIn(): boolean { return getCurrentUser() !== null; }
 
 export function adminLogin(email: string, password: string): { success: boolean; error?: string } {
   const users = getStore<User>("users");
@@ -252,8 +242,11 @@ export function getPosts(): Post[] {
   return getStore<Post>("posts").sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
-export function createPost(post: Omit<Post, "id" | "createdAt" | "likes" | "comments" | "reported">): Post {
-  const newPost: Post = { ...post, id: generateId(), createdAt: new Date().toISOString(), likes: 0, comments: 0, reported: false };
+export function createPost(post: Omit<Post, "id" | "createdAt" | "likes" | "dislikes" | "comments" | "reported" | "isDeleted">): Post {
+  const newPost: Post = {
+    ...post, id: generateId(), createdAt: new Date().toISOString(),
+    likes: 0, dislikes: 0, comments: 0, reported: false, isDeleted: false,
+  };
   const posts = getStore<Post>("posts");
   posts.push(newPost);
   setStore("posts", posts);
@@ -267,7 +260,8 @@ export function deletePost(id: string) {
 // ─── Comments ────────────────────────────────────────────────────────────────
 
 export function getComments(postId: string): Comment[] {
-  return getStore<Comment>("comments").filter((c) => c.postId === postId).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  return getStore<Comment>("comments").filter((c) => c.postId === postId)
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 }
 
 export function createComment(comment: Omit<Comment, "id" | "createdAt" | "reported">): Comment {
@@ -275,41 +269,7 @@ export function createComment(comment: Omit<Comment, "id" | "createdAt" | "repor
   const comments = getStore<Comment>("comments");
   comments.push(newComment);
   setStore("comments", comments);
-  const posts = getStore<Post>("posts");
-  const postIdx = posts.findIndex((p) => p.id === comment.postId);
-  if (postIdx !== -1) { posts[postIdx].comments = (posts[postIdx].comments || 0) + 1; setStore("posts", posts); }
   return newComment;
-}
-
-// ─── Reactions ───────────────────────────────────────────────────────────────
-
-export function getUserReaction(postId: string, userId: string): "like" | "dislike" | null {
-  return getStore<Reaction>("reactions").find((r) => r.postId === postId && r.userId === userId)?.type ?? null;
-}
-
-export function toggleReaction(postId: string, userId: string, type: "like" | "dislike") {
-  const reactions = getStore<Reaction>("reactions");
-  const existing = reactions.findIndex((r) => r.postId === postId && r.userId === userId);
-  const posts = getStore<Post>("posts");
-  const postIdx = posts.findIndex((p) => p.id === postId);
-  if (existing !== -1) {
-    const prev = reactions[existing].type;
-    if (prev === type) {
-      reactions.splice(existing, 1);
-      if (postIdx !== -1 && type === "like") posts[postIdx].likes = Math.max(0, (posts[postIdx].likes || 0) - 1);
-    } else {
-      reactions[existing].type = type;
-      if (postIdx !== -1) {
-        if (type === "like") posts[postIdx].likes = (posts[postIdx].likes || 0) + 1;
-        else posts[postIdx].likes = Math.max(0, (posts[postIdx].likes || 0) - 1);
-      }
-    }
-  } else {
-    reactions.push({ id: generateId(), postId, userId, type });
-    if (postIdx !== -1 && type === "like") posts[postIdx].likes = (posts[postIdx].likes || 0) + 1;
-  }
-  setStore("reactions", reactions);
-  setStore("posts", posts);
 }
 
 // ─── Notifications ───────────────────────────────────────────────────────────
@@ -324,7 +284,8 @@ export function createNotification(notification: Omit<Notification, "id" | "crea
 
 export function getNotifications(userId?: string): Notification[] {
   const all = getStore<Notification>("notifications");
-  return (userId ? all.filter((n) => n.userId === userId) : all).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  return (userId ? all.filter((n) => n.userId === userId) : all)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
 export function markNotificationRead(id: string) {
@@ -361,13 +322,15 @@ export function updateListing(id: string, updates: Partial<MarketplaceListing>) 
 
 export function getExperts(): Expert[] { return getStore<Expert>("experts"); }
 export function createExpert(expert: Omit<Expert, "id" | "approved">): Expert {
-  const newExpert: Expert = { ...expert, id: generateId(), approved: false };
-  const experts = getStore<Expert>("experts"); experts.push(newExpert); setStore("experts", experts); return newExpert;
+  const e: Expert = { ...expert, id: generateId(), approved: false };
+  const experts = getStore<Expert>("experts"); experts.push(e); setStore("experts", experts); return e;
 }
 export function updateExpert(id: string, updates: Partial<Expert>) {
   setStore("experts", getStore<Expert>("experts").map((e) => e.id === id ? { ...e, ...updates } : e));
 }
-export function deleteExpert(id: string) { setStore("experts", getStore<Expert>("experts").filter((e) => e.id !== id)); }
+export function deleteExpert(id: string) {
+  setStore("experts", getStore<Expert>("experts").filter((e) => e.id !== id));
+}
 
 // ─── Alerts ──────────────────────────────────────────────────────────────────
 
@@ -378,13 +341,15 @@ export function getAllAlerts(): Alert[] {
   return getStore<Alert>("alerts").sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 export function createAlert(alert: Omit<Alert, "id" | "createdAt" | "active">): Alert {
-  const newAlert: Alert = { ...alert, id: generateId(), createdAt: new Date().toISOString(), active: true };
-  const alerts = getStore<Alert>("alerts"); alerts.push(newAlert); setStore("alerts", alerts); return newAlert;
+  const a: Alert = { ...alert, id: generateId(), createdAt: new Date().toISOString(), active: true };
+  const alerts = getStore<Alert>("alerts"); alerts.push(a); setStore("alerts", alerts); return a;
 }
 export function updateAlert(id: string, updates: Partial<Alert>) {
   setStore("alerts", getStore<Alert>("alerts").map((a) => a.id === id ? { ...a, ...updates } : a));
 }
-export function deleteAlert(id: string) { setStore("alerts", getStore<Alert>("alerts").filter((a) => a.id !== id)); }
+export function deleteAlert(id: string) {
+  setStore("alerts", getStore<Alert>("alerts").filter((a) => a.id !== id));
+}
 
 // ─── Articles ────────────────────────────────────────────────────────────────
 
@@ -395,13 +360,15 @@ export function getAllArticles(): Article[] {
   return getStore<Article>("articles").sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 export function createArticle(article: Omit<Article, "id" | "createdAt">): Article {
-  const newArticle: Article = { ...article, id: generateId(), createdAt: new Date().toISOString() };
-  const articles = getStore<Article>("articles"); articles.push(newArticle); setStore("articles", articles); return newArticle;
+  const a: Article = { ...article, id: generateId(), createdAt: new Date().toISOString() };
+  const articles = getStore<Article>("articles"); articles.push(a); setStore("articles", articles); return a;
 }
 export function updateArticle(id: string, updates: Partial<Article>) {
   setStore("articles", getStore<Article>("articles").map((a) => a.id === id ? { ...a, ...updates } : a));
 }
-export function deleteArticle(id: string) { setStore("articles", getStore<Article>("articles").filter((a) => a.id !== id)); }
+export function deleteArticle(id: string) {
+  setStore("articles", getStore<Article>("articles").filter((a) => a.id !== id));
+}
 
 // ─── Users (Admin) ───────────────────────────────────────────────────────────
 
@@ -418,8 +385,8 @@ export function deleteUser(id: string) {
   if (current?.id === id) setCurrentUser(null);
 }
 export function createUser(user: Omit<User, "id" | "createdAt" | "suspended">): User {
-  const newUser: User = { ...user, id: generateId(), createdAt: new Date().toISOString(), suspended: false };
-  const users = getStore<User>("users"); users.push(newUser); setStore("users", users); return newUser;
+  const u: User = { ...user, id: generateId(), createdAt: new Date().toISOString(), suspended: false };
+  const users = getStore<User>("users"); users.push(u); setStore("users", users); return u;
 }
 
 // ─── Groups ──────────────────────────────────────────────────────────────────
@@ -433,9 +400,9 @@ export function getFarmActivities(userId?: string): FarmActivity[] {
   return userId ? all.filter((a) => a.userId === userId) : all;
 }
 export function createFarmActivity(activity: Omit<FarmActivity, "id">): FarmActivity {
-  const newActivity: FarmActivity = { ...activity, id: generateId() };
+  const a: FarmActivity = { ...activity, id: generateId() };
   const activities = getStore<FarmActivity>("farm_activities");
-  activities.push(newActivity); setStore("farm_activities", activities); return newActivity;
+  activities.push(a); setStore("farm_activities", activities); return a;
 }
 export function updateFarmActivity(id: string, updates: Partial<FarmActivity>) {
   setStore("farm_activities", getStore<FarmActivity>("farm_activities").map((a) => a.id === id ? { ...a, ...updates } : a));
@@ -451,7 +418,7 @@ export function getPlatformStats() {
     totalExperts: getStore<Expert>("experts").length,
     totalAlerts: getStore<Alert>("alerts").filter((a) => a.active).length,
     totalArticles: getStore<Article>("articles").length,
-    reportedPosts: getStore<Post>("posts").filter((p) => p.reported).length,
+    reportedPosts: 0,
     pendingExperts: getStore<Expert>("experts").filter((e) => !e.approved).length,
   };
 }
@@ -478,26 +445,12 @@ export function searchPlatform(query: string): SearchResult[] {
     if (p.text.toLowerCase().includes(q) || p.authorName.toLowerCase().includes(q))
       results.push({ id: p.id, category: "Posts", title: p.text.slice(0, 60) + (p.text.length > 60 ? "..." : ""), subtitle: `Posted by ${p.authorName}` });
   });
-  getGroups().forEach((g) => {
-    if (g.name.toLowerCase().includes(q))
-      results.push({ id: g.id, category: "Groups", title: g.name, subtitle: `${g.members.toLocaleString()} members` });
-  });
   getListings().forEach((l) => {
-    if (l.title.toLowerCase().includes(q) || l.category.toLowerCase().includes(q))
-      results.push({ id: l.id, category: "Marketplace", title: l.title, subtitle: `${l.price} · ${l.location}` });
-  });
-  getExperts().filter((e) => e.approved).forEach((e) => {
-    if (e.name.toLowerCase().includes(q) || e.specialization.toLowerCase().includes(q))
-      results.push({ id: e.id, category: "Experts", title: e.name, subtitle: `${e.specialization} · ${e.location}` });
-  });
-  getArticles().forEach((a) => {
-    if (a.title.toLowerCase().includes(q) || a.tag.toLowerCase().includes(q))
-      results.push({ id: a.id, category: "Articles", title: a.title, subtitle: `${a.readTime} read` });
+    if (l.title.toLowerCase().includes(q))
+      results.push({ id: l.id, category: "Marketplace", title: l.title, subtitle: l.location });
   });
   return results;
 }
-
-// ─── Initialize ───────────────────────────────────────────────────────────────
 
 export function initializeApp() {
   // No hardcoded seed data — all content comes from Supabase

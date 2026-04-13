@@ -2,7 +2,7 @@ import { useState, useCallback } from "react";
 import AppLayout from "@/components/AppLayout";
 import {
   Users, MessageSquare, Plus, LogIn, Loader2, TrendingUp,
-  Settings, Trash2, UserMinus, Shield, X, ChevronLeft, Lock, Globe,
+  Settings, Trash2, UserMinus, Shield, X, ChevronLeft,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -21,16 +21,14 @@ import { useToast } from "@/hooks/use-toast";
 
 type Tab = "feed" | "communities";
 
-const EMOJIS = ["🌱", "🌾", "🐄", "🐓", "🐝", "🥕", "🌽", "🍅", "🌿", "💧", "☀️", "🌍"];
-
 // ─── Community Card ───────────────────────────────────────────────────────────
 
+function communityInitial(name: string) {
+  return name.trim().charAt(0).toUpperCase();
+}
+
 const CommunityCard = ({
-  community,
-  onSelect,
-  onJoin,
-  onLeave,
-  joining,
+  community, onSelect, onJoin, onLeave, joining,
 }: {
   community: Community;
   onSelect: (c: Community) => void;
@@ -45,15 +43,17 @@ const CommunityCard = ({
   return (
     <div className="harvest-card p-4 flex items-start gap-3">
       <button onClick={() => onSelect(community)} className="flex-1 flex items-start gap-3 text-left min-w-0">
-        <span className="text-2xl shrink-0">{community.emoji}</span>
+        {/* Avatar: image_url if available, else initial */}
+        <div className="h-10 w-10 shrink-0 rounded-xl overflow-hidden bg-primary/10 flex items-center justify-center">
+          {community.imageUrl ? (
+            <img src={community.imageUrl} alt={community.name} className="h-full w-full object-cover" />
+          ) : (
+            <span className="text-base font-bold text-primary">{communityInitial(community.name)}</span>
+          )}
+        </div>
         <div className="min-w-0">
           <div className="flex items-center gap-1.5">
             <p className="text-sm font-semibold text-foreground truncate">{community.name}</p>
-            {community.isPrivate ? (
-              <Lock className="h-3 w-3 text-muted-foreground shrink-0" />
-            ) : (
-              <Globe className="h-3 w-3 text-muted-foreground shrink-0" />
-            )}
             {community.memberRole === "admin" && (
               <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">Admin</span>
             )}
@@ -76,9 +76,7 @@ const CommunityCard = ({
             : "bg-primary text-primary-foreground hover:bg-primary/90"
         }`}
       >
-        {joining === community.id ? (
-          <Loader2 className="h-3 w-3 animate-spin" />
-        ) : isMember ? "Leave" : "Join"}
+        {joining === community.id ? <Loader2 className="h-3 w-3 animate-spin" /> : isMember ? "Leave" : "Join"}
       </button>
     </div>
   );
@@ -87,22 +85,17 @@ const CommunityCard = ({
 // ─── Create Community Sheet ───────────────────────────────────────────────────
 
 const CreateCommunitySheet = ({
-  open,
-  onClose,
-  onSubmit,
-  submitting,
+  open, onClose, onSubmit, submitting,
 }: {
   open: boolean;
   onClose: () => void;
-  onSubmit: (data: { name: string; description: string; emoji: string; is_private: boolean }) => void;
+  onSubmit: (data: { name: string; description: string }) => void;
   submitting: boolean;
 }) => {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [emoji, setEmoji] = useState("🌱");
-  const [isPrivate, setIsPrivate] = useState(false);
 
-  const reset = () => { setName(""); setDescription(""); setEmoji("🌱"); setIsPrivate(false); };
+  const reset = () => { setName(""); setDescription(""); };
   const handleClose = () => { reset(); onClose(); };
 
   if (!open) return null;
@@ -118,21 +111,6 @@ const CreateCommunitySheet = ({
         </div>
 
         <div className="space-y-4">
-          <div>
-            <label className="text-xs font-medium text-muted-foreground mb-2 block">Choose an emoji</label>
-            <div className="flex flex-wrap gap-2">
-              {EMOJIS.map((e) => (
-                <button
-                  key={e}
-                  onClick={() => setEmoji(e)}
-                  className={`h-9 w-9 rounded-lg text-lg transition-colors ${emoji === e ? "bg-primary/10 ring-2 ring-primary" : "hover:bg-muted"}`}
-                >
-                  {e}
-                </button>
-              ))}
-            </div>
-          </div>
-
           <div>
             <label className="text-xs font-medium text-muted-foreground mb-1 block">Community name *</label>
             <input
@@ -155,21 +133,8 @@ const CreateCommunitySheet = ({
             />
           </div>
 
-          <div className="flex items-center justify-between rounded-xl border px-4 py-3">
-            <div>
-              <p className="text-sm font-medium text-foreground">Private community</p>
-              <p className="text-xs text-muted-foreground">Only members can see posts</p>
-            </div>
-            <button
-              onClick={() => setIsPrivate(!isPrivate)}
-              className={`relative h-6 w-11 rounded-full transition-colors ${isPrivate ? "bg-primary" : "bg-muted"}`}
-            >
-              <span className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow transition-transform ${isPrivate ? "translate-x-5" : "translate-x-1"}`} />
-            </button>
-          </div>
-
           <button
-            onClick={() => onSubmit({ name: name.trim(), description: description.trim(), emoji, is_private: isPrivate })}
+            onClick={() => onSubmit({ name: name.trim(), description: description.trim() })}
             disabled={!name.trim() || submitting}
             className="w-full rounded-xl bg-primary py-3 text-sm font-medium text-primary-foreground disabled:opacity-40 flex items-center justify-center gap-2"
           >
@@ -184,17 +149,14 @@ const CreateCommunitySheet = ({
 // ─── Community Detail View ────────────────────────────────────────────────────
 
 const CommunityDetail = ({
-  community,
-  userId,
-  onBack,
-  onPostCreated,
+  community, userId, onBack, onPostCreated,
 }: {
   community: Community;
   userId: string | undefined;
   onBack: () => void;
   onPostCreated: () => void;
 }) => {
-  const { user, isAuthenticated } = useAuth();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<"posts" | "members">("posts");
@@ -202,7 +164,6 @@ const CommunityDetail = ({
   const [showEditModal, setShowEditModal] = useState(false);
   const [editName, setEditName] = useState(community.name);
   const [editDesc, setEditDesc] = useState(community.description);
-  const [editEmoji, setEditEmoji] = useState(community.emoji);
 
   const isAdmin = community.memberRole === "admin";
 
@@ -224,11 +185,12 @@ const CommunityDetail = ({
       onPostCreated();
       setShowCreate(false);
     },
+    onError: () => toast({ title: "Failed to create post", variant: "destructive" }),
   });
 
   const handleEditSave = async () => {
     try {
-      await updateCommunity(community.id, { name: editName.trim(), description: editDesc.trim(), emoji: editEmoji });
+      await updateCommunity(community.id, { name: editName.trim(), description: editDesc.trim() });
       queryClient.invalidateQueries({ queryKey: ["/api/communities"] });
       setShowEditModal(false);
       toast({ title: "Community updated" });
@@ -277,7 +239,13 @@ const CommunityDetail = ({
         <button onClick={onBack} className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-muted transition-colors">
           <ChevronLeft className="h-5 w-5 text-foreground" />
         </button>
-        <span className="text-2xl">{community.emoji}</span>
+        <div className="h-9 w-9 shrink-0 rounded-xl overflow-hidden bg-primary/10 flex items-center justify-center">
+          {community.imageUrl ? (
+            <img src={community.imageUrl} alt={community.name} className="h-full w-full object-cover" />
+          ) : (
+            <span className="text-sm font-bold text-primary">{communityInitial(community.name)}</span>
+          )}
+        </div>
         <div className="flex-1 min-w-0">
           <h2 className="text-lg font-bold text-foreground truncate">{community.name}</h2>
           <p className="text-xs text-muted-foreground">{community.membersCount} members</p>
@@ -328,11 +296,7 @@ const CommunityDetail = ({
         postsLoading ? (
           <div className="flex justify-center py-10"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
         ) : posts.length === 0 ? (
-          <EmptyState
-            icon={MessageSquare}
-            title="No posts yet"
-            description="Be the first to share in this community."
-          />
+          <EmptyState icon={MessageSquare} title="No posts yet" description="Be the first to share in this community." />
         ) : (
           <div className="space-y-4">
             {posts.map((post) => <PostCard key={post.id} post={post} />)}
@@ -363,11 +327,13 @@ const CommunityDetail = ({
                 {isAdmin && m.userId !== userId && (
                   <div className="flex gap-1">
                     {m.role !== "admin" && (
-                      <button onClick={() => handlePromote(m)} title="Promote to admin" className="flex h-7 w-7 items-center justify-center rounded-full hover:bg-muted transition-colors">
+                      <button onClick={() => handlePromote(m)} title="Promote to admin"
+                        className="flex h-7 w-7 items-center justify-center rounded-full hover:bg-muted transition-colors">
                         <Shield className="h-3.5 w-3.5 text-muted-foreground" />
                       </button>
                     )}
-                    <button onClick={() => handleRemoveMember(m)} title="Remove member" className="flex h-7 w-7 items-center justify-center rounded-full hover:bg-destructive/10 transition-colors">
+                    <button onClick={() => handleRemoveMember(m)} title="Remove member"
+                      className="flex h-7 w-7 items-center justify-center rounded-full hover:bg-destructive/10 transition-colors">
                       <UserMinus className="h-3.5 w-3.5 text-destructive" />
                     </button>
                   </div>
@@ -378,18 +344,18 @@ const CommunityDetail = ({
         )
       )}
 
-      {/* Create post sheet */}
+      {/* Create post sheet — fixed to this community */}
       <CreatePostSheet
         open={showCreate}
         onClose={() => setShowCreate(false)}
+        fixedCommunityId={community.id}
         onSubmit={(data) => {
           if (!user) return;
           createPostMutation.mutate({
-            author_id: user.id,
+            user_id: user.id,         // posts.user_id (NOT author_id)
+            community_id: data.communityId,
             content: data.text,
-            tag: data.tag,
             image_url: data.imageUrl,
-            community_id: community.id,
           });
         }}
       />
@@ -403,14 +369,20 @@ const CommunityDetail = ({
               <h3 className="font-bold text-foreground">Edit Community</h3>
               <button onClick={() => setShowEditModal(false)}><X className="h-4 w-4 text-muted-foreground" /></button>
             </div>
-            <div className="flex flex-wrap gap-2">
-              {EMOJIS.map((e) => (
-                <button key={e} onClick={() => setEditEmoji(e)} className={`h-9 w-9 rounded-lg text-lg transition-colors ${editEmoji === e ? "bg-primary/10 ring-2 ring-primary" : "hover:bg-muted"}`}>{e}</button>
-              ))}
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">Name</label>
+              <input value={editName} onChange={(e) => setEditName(e.target.value)}
+                className="w-full rounded-xl border bg-background px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary" />
             </div>
-            <input value={editName} onChange={(e) => setEditName(e.target.value)} className="w-full rounded-xl border bg-background px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary" />
-            <textarea value={editDesc} onChange={(e) => setEditDesc(e.target.value)} rows={3} className="w-full rounded-xl border bg-background px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary resize-none" />
-            <button onClick={handleEditSave} disabled={!editName.trim()} className="w-full rounded-xl bg-primary py-3 text-sm font-medium text-primary-foreground disabled:opacity-40">Save Changes</button>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">Description</label>
+              <textarea value={editDesc} onChange={(e) => setEditDesc(e.target.value)} rows={3}
+                className="w-full rounded-xl border bg-background px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary resize-none" />
+            </div>
+            <button onClick={handleEditSave} disabled={!editName.trim()}
+              className="w-full rounded-xl bg-primary py-3 text-sm font-medium text-primary-foreground disabled:opacity-40">
+              Save Changes
+            </button>
           </div>
         </div>
       )}
@@ -441,10 +413,7 @@ const Community = () => {
 
   const { data: posts = [], isLoading: postsLoading } = useQuery({
     queryKey: ["/api/posts", filterCommunityId],
-    queryFn: () => fetchPosts({
-      communityId: filterCommunityId || undefined,
-      blockedUserIds: blockedIds,
-    }),
+    queryFn: () => fetchPosts({ communityId: filterCommunityId || undefined, blockedUserIds: blockedIds }),
     enabled: activeTab === "feed",
   });
 
@@ -453,6 +422,8 @@ const Community = () => {
     queryFn: () => fetchCommunities(user?.id),
   });
 
+  const myJoinedCommunities = communities.filter((c) => !!c.memberRole);
+
   const createPostMutation = useMutation({
     mutationFn: createPost,
     onMutate: async (payload) => {
@@ -460,16 +431,18 @@ const Community = () => {
       const prev = queryClient.getQueryData<typeof posts>(["/api/posts", filterCommunityId]);
       const optimistic = {
         id: `temp-${Date.now()}`,
-        authorId: payload.author_id,
+        authorId: payload.user_id,
         authorName: user?.name || "",
         authorAvatar: user?.avatar || "",
         authorLocation: user?.location || "",
         text: payload.content,
-        tag: payload.tag,
         likes: 0,
+        dislikes: 0,
         comments: 0,
         createdAt: new Date().toISOString(),
         reported: false,
+        isDeleted: false,
+        communityId: payload.community_id,
         imageUrl: payload.image_url,
       };
       queryClient.setQueryData(["/api/posts", filterCommunityId], [optimistic, ...(prev || [])]);
@@ -486,8 +459,8 @@ const Community = () => {
   });
 
   const createCommunityMutation = useMutation({
-    mutationFn: (data: { name: string; description: string; emoji: string; is_private: boolean }) =>
-      createCommunity({ creator_id: user!.id, ...data }),
+    mutationFn: (data: { name: string; description: string }) =>
+      createCommunity({ creator_id: user!.id, name: data.name, description: data.description }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/communities"] });
       setShowCreateCommunity(false);
@@ -504,9 +477,7 @@ const Community = () => {
       queryClient.invalidateQueries({ queryKey: ["/api/communities"] });
     } catch {
       toast({ title: "Failed to join community", variant: "destructive" });
-    } finally {
-      setJoiningId(null);
-    }
+    } finally { setJoiningId(null); }
   }, [user, queryClient, toast]);
 
   const handleLeave = useCallback(async (id: string) => {
@@ -517,12 +488,8 @@ const Community = () => {
       queryClient.invalidateQueries({ queryKey: ["/api/communities"] });
     } catch {
       toast({ title: "Failed to leave community", variant: "destructive" });
-    } finally {
-      setJoiningId(null);
-    }
+    } finally { setJoiningId(null); }
   }, [user, queryClient, toast]);
-
-  const myJoinedCommunities = communities.filter((c) => !!c.memberRole);
 
   // Community detail view
   if (selectedCommunity) {
@@ -561,7 +528,7 @@ const Community = () => {
                   onClick={() => setShowCreateCommunity(true)}
                   className="flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
                 >
-                  <Plus className="h-4 w-4" /> Create
+                  <Plus className="h-4 w-4" /> New
                 </button>
               )}
             </div>
@@ -577,32 +544,29 @@ const Community = () => {
 
         {/* Tabs */}
         <div className="flex gap-1 rounded-xl bg-muted p-1">
-          {([
-            { key: "feed", label: "Feed", icon: TrendingUp },
-            { key: "communities", label: "Communities", icon: Users },
-          ] as { key: Tab; label: string; icon: React.ElementType }[]).map(({ key, label, icon: Icon }) => (
+          {(["feed", "communities"] as Tab[]).map((t) => (
             <button
-              key={key}
-              onClick={() => setActiveTab(key)}
-              className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-medium transition-colors ${
-                activeTab === key ? "bg-card shadow-sm text-foreground" : "text-muted-foreground"
+              key={t}
+              onClick={() => setActiveTab(t)}
+              className={`flex-1 rounded-lg py-1.5 text-xs font-medium capitalize transition-colors ${
+                activeTab === t ? "bg-card shadow-sm text-foreground" : "text-muted-foreground"
               }`}
             >
-              <Icon className="h-3.5 w-3.5" /> {label}
+              {t === "feed" ? "Feed" : "Communities"}
             </button>
           ))}
         </div>
 
-        {/* ── FEED TAB ── */}
+        {/* Feed tab */}
         {activeTab === "feed" && (
-          <div className="space-y-4">
+          <>
             {/* Community filter chips */}
             {myJoinedCommunities.length > 0 && (
-              <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+              <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
                 <button
                   onClick={() => setFilterCommunityId(null)}
-                  className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors border ${
-                    !filterCommunityId ? "bg-primary text-primary-foreground border-primary" : "bg-card text-foreground border-border hover:bg-muted"
+                  className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+                    !filterCommunityId ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground hover:bg-secondary/80"
                   }`}
                 >
                   All
@@ -610,12 +574,12 @@ const Community = () => {
                 {myJoinedCommunities.map((c) => (
                   <button
                     key={c.id}
-                    onClick={() => setFilterCommunityId(c.id === filterCommunityId ? null : c.id)}
-                    className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors border ${
-                      filterCommunityId === c.id ? "bg-primary text-primary-foreground border-primary" : "bg-card text-foreground border-border hover:bg-muted"
+                    onClick={() => setFilterCommunityId(filterCommunityId === c.id ? null : c.id)}
+                    className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+                      filterCommunityId === c.id ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground hover:bg-secondary/80"
                     }`}
                   >
-                    {c.emoji} {c.name}
+                    {c.name}
                   </button>
                 ))}
               </div>
@@ -629,93 +593,95 @@ const Community = () => {
               <EmptyState
                 icon={MessageSquare}
                 title="No posts yet"
-                description="Be the first to share tips, ask questions, or start a discussion with fellow farmers."
-                action={isAuthenticated ? { label: "Create Post", onClick: () => setShowCreate(true) } : undefined}
+                description={
+                  myJoinedCommunities.length === 0
+                    ? "Join a community in the Communities tab and start posting."
+                    : filterCommunityId
+                    ? "No posts in this community yet. Be the first to post!"
+                    : "No posts yet. Be the first to share something with the community!"
+                }
+                action={
+                  myJoinedCommunities.length === 0
+                    ? { label: "Browse Communities", onClick: () => setActiveTab("communities") }
+                    : isAuthenticated ? { label: "Create Post", onClick: () => setShowCreate(true) } : undefined
+                }
               />
             ) : (
               <div className="space-y-4">
                 {posts.map((post) => <PostCard key={post.id} post={post} />)}
               </div>
             )}
-          </div>
+          </>
         )}
 
-        {/* ── COMMUNITIES TAB ── */}
+        {/* Communities tab */}
         {activeTab === "communities" && (
-          <div className="space-y-3">
-            {communitiesLoading ? (
-              <div className="flex justify-center py-12">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              </div>
-            ) : communities.length === 0 ? (
-              <EmptyState
-                icon={Users}
-                title="No communities yet"
-                description="Create the first community for farmers in your region or with your interests."
-                action={isAuthenticated ? { label: "Create Community", onClick: () => setShowCreateCommunity(true) } : undefined}
-              />
-            ) : (
-              <>
-                {myJoinedCommunities.length > 0 && (
-                  <div>
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Your Communities</p>
-                    <div className="space-y-2">
-                      {myJoinedCommunities.map((c) => (
-                        <CommunityCard
-                          key={c.id}
-                          community={c}
-                          onSelect={setSelectedCommunity}
-                          onJoin={handleJoin}
-                          onLeave={handleLeave}
-                          joining={joiningId}
-                        />
-                      ))}
-                    </div>
+          communitiesLoading ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : communities.length === 0 ? (
+            <EmptyState
+              icon={Users}
+              title="No communities yet"
+              description="Create the first community for farmers in your area."
+              action={isAuthenticated ? { label: "Create Community", onClick: () => setShowCreateCommunity(true) } : undefined}
+            />
+          ) : (
+            <div className="space-y-4">
+              {/* My communities */}
+              {myJoinedCommunities.length > 0 && (
+                <div>
+                  <h2 className="text-sm font-semibold text-foreground mb-2 flex items-center gap-1.5">
+                    <Users className="h-4 w-4 text-primary" /> Your Communities
+                  </h2>
+                  <div className="space-y-2">
+                    {myJoinedCommunities.map((c) => (
+                      <CommunityCard key={c.id} community={c} onSelect={setSelectedCommunity} onJoin={handleJoin} onLeave={handleLeave} joining={joiningId} />
+                    ))}
                   </div>
-                )}
+                </div>
+              )}
 
-                {communities.filter((c) => !c.memberRole).length > 0 && (
-                  <div>
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 mt-4">Discover</p>
-                    <div className="space-y-2">
-                      {communities.filter((c) => !c.memberRole).map((c) => (
-                        <CommunityCard
-                          key={c.id}
-                          community={c}
-                          onSelect={setSelectedCommunity}
-                          onJoin={handleJoin}
-                          onLeave={handleLeave}
-                          joining={joiningId}
-                        />
-                      ))}
-                    </div>
+              {/* Discover */}
+              {communities.filter((c) => !c.memberRole).length > 0 && (
+                <div>
+                  <h2 className="text-sm font-semibold text-foreground mb-2 flex items-center gap-1.5">
+                    <TrendingUp className="h-4 w-4 text-primary" /> Discover
+                  </h2>
+                  <div className="space-y-2">
+                    {communities.filter((c) => !c.memberRole).map((c) => (
+                      <CommunityCard key={c.id} community={c} onSelect={setSelectedCommunity} onJoin={handleJoin} onLeave={handleLeave} joining={joiningId} />
+                    ))}
                   </div>
-                )}
-              </>
-            )}
-          </div>
+                </div>
+              )}
+            </div>
+          )
         )}
       </div>
 
-      {/* Sheets */}
+      {/* Create Post sheet — with community picker */}
       <CreatePostSheet
         open={showCreate}
         onClose={() => setShowCreate(false)}
+        communities={myJoinedCommunities.map((c) => ({ id: c.id, name: c.name }))}
         onSubmit={(data) => {
           if (!user) return;
           createPostMutation.mutate({
-            author_id: user.id,
+            user_id: user.id,             // posts.user_id (NOT author_id)
+            community_id: data.communityId,
             content: data.text,
-            tag: data.tag,
             image_url: data.imageUrl,
           });
         }}
       />
 
+      {/* Create community sheet */}
       <CreateCommunitySheet
         open={showCreateCommunity}
         onClose={() => setShowCreateCommunity(false)}
-        onSubmit={createCommunityMutation.mutate}
+        onSubmit={(data) => createCommunityMutation.mutate(data)}
         submitting={createCommunityMutation.isPending}
       />
     </AppLayout>
