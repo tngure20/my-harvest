@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ThumbsUp, ThumbsDown, MessageCircle, Loader2 } from "lucide-react";
+import { ThumbsUp, ThumbsDown, MessageCircle, Share2, Trash2, Flag, Ban, MoreHorizontal, Loader2, ExternalLink } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { Post, Comment } from "@/lib/dataService";
 import { useAuth } from "@/contexts/AuthContext";
@@ -11,16 +11,24 @@ import {
   toggleReactionSB,
   getUserReactionSB,
   createNotificationSB,
+  deletePost,
+  reportPost,
+  sharePost,
+  blockUser,
 } from "@/lib/supabaseService";
+import { useToast } from "@/hooks/use-toast";
 
 interface PostCardProps {
   post: Post;
+  onDeleted?: (id: string) => void;
 }
 
-const PostCard = ({ post }: PostCardProps) => {
+const PostCard = ({ post, onDeleted }: PostCardProps) => {
   const { user, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { toast } = useToast();
+
   const [showComments, setShowComments] = useState(false);
   const [comments, setComments] = useState<Comment[]>([]);
   const [loadingComments, setLoadingComments] = useState(false);
@@ -28,6 +36,18 @@ const PostCard = ({ post }: PostCardProps) => {
   const [submitting, setSubmitting] = useState(false);
   const [userReaction, setUserReaction] = useState<"like" | "dislike" | null>(null);
   const [localLikes, setLocalLikes] = useState(post.likes);
+  const [reactionLoaded, setReactionLoaded] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
+  const [deleted, setDeleted] = useState(false);
+
+  const isOwner = isAuthenticated && user?.id === post.authorId;
+
+  const loadReaction = async () => {
+    if (!isAuthenticated || !user || reactionLoaded) return;
+    const r = await getUserReactionSB(post.id, user.id);
+    setUserReaction(r);
+    setReactionLoaded(true);
+  };
 
   const loadComments = async () => {
     setLoadingComments(true);
@@ -37,12 +57,18 @@ const PostCard = ({ post }: PostCardProps) => {
   };
 
   const handleToggleComments = async () => {
-    if (!showComments) await loadComments();
+    if (!showComments) {
+      await loadComments();
+      await loadReaction();
+    }
     setShowComments(!showComments);
   };
 
   const handleReact = async (type: "like" | "dislike") => {
     if (!isAuthenticated) { navigate("/login"); return; }
+    if (!user) return;
+
+    // Optimistic update
     const prev = userReaction;
     if (prev === type) {
       setUserReaction(null);
@@ -53,34 +79,121 @@ const PostCard = ({ post }: PostCardProps) => {
       else if (type === "like") setLocalLikes((l) => l + 1);
       setUserReaction(type);
     }
-    await toggleReactionSB(post.id, user!.id, type);
-    queryClient.invalidateQueries({ queryKey: ["/api/posts"] });
+
+    try {
+      const { newLikes, newReaction } = await toggleReactionSB(post.id, user.id, type);
+      setLocalLikes(newLikes);
+      setUserReaction(newReaction);
+      queryClient.invalidateQueries({ queryKey: ["/api/posts"] });
+
+      if (type === "like" && newReaction === "like" && post.authorId !== user.id) {
+        await createNotificationSB({
+          user_id: post.authorId,
+          type: "like",
+          title: "Someone liked your post",
+          message: `${user.name} liked your post`,
+          avatar_url: typeof user.avatar === "string" ? user.avatar : undefined,
+        });
+      }
+    } catch {
+      // Rollback on error
+      setUserReaction(prev);
+      setLocalLikes(post.likes);
+    }
   };
 
   const handleComment = async () => {
     if (!isAuthenticated) { navigate("/login"); return; }
-    if (!commentText.trim() || submitting) return;
+    if (!commentText.trim() || submitting || !user) return;
     setSubmitting(true);
+    const optimisticComment: Comment = {
+      id: `temp-${Date.now()}`,
+      postId: post.id,
+      authorId: user.id,
+      authorName: user.name,
+      authorAvatar: user.avatar,
+      text: commentText.trim(),
+      createdAt: new Date().toISOString(),
+      reported: false,
+    };
+    setComments((prev) => [...prev, optimisticComment]);
+    setCommentText("");
+
     try {
-      await createComment({
-        post_id: post.id,
-        author_id: user!.id,
-        content: commentText.trim(),
-      });
-      if (post.authorId !== user!.id) {
+      await createComment({ post_id: post.id, author_id: user.id, content: optimisticComment.text });
+      if (post.authorId !== user.id) {
         await createNotificationSB({
           user_id: post.authorId,
           type: "comment",
-          title: "New comment",
-          message: `${user!.name} commented on your post`,
-          avatar_url: typeof user!.avatar === "string" ? user!.avatar : undefined,
+          title: "New comment on your post",
+          message: `${user.name} commented on your post`,
+          avatar_url: typeof user.avatar === "string" ? user.avatar : undefined,
         });
       }
-      setCommentText("");
       await loadComments();
       queryClient.invalidateQueries({ queryKey: ["/api/posts"] });
+    } catch {
+      setComments((prev) => prev.filter((c) => c.id !== optimisticComment.id));
+      toast({ title: "Failed to post comment", variant: "destructive" });
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleShare = async () => {
+    if (!isAuthenticated) { navigate("/login"); return; }
+    if (!user) return;
+    setShowMenu(false);
+    try {
+      await sharePost(post, user.id);
+      queryClient.invalidateQueries({ queryKey: ["/api/posts"] });
+      toast({ title: "Post shared to your feed" });
+    } catch {
+      toast({ title: "Failed to share post", variant: "destructive" });
+    }
+  };
+
+  const handleCopyLink = () => {
+    setShowMenu(false);
+    const url = `${window.location.origin}/community?post=${post.id}`;
+    navigator.clipboard.writeText(url).then(() => toast({ title: "Link copied!" }));
+  };
+
+  const handleDelete = async () => {
+    if (!isOwner) return;
+    setShowMenu(false);
+    try {
+      await deletePost(post.id);
+      setDeleted(true);
+      onDeleted?.(post.id);
+      queryClient.invalidateQueries({ queryKey: ["/api/posts"] });
+      toast({ title: "Post deleted" });
+    } catch {
+      toast({ title: "Failed to delete post", variant: "destructive" });
+    }
+  };
+
+  const handleReport = async () => {
+    if (!isAuthenticated) { navigate("/login"); return; }
+    setShowMenu(false);
+    try {
+      await reportPost(post.id);
+      toast({ title: "Post reported", description: "Thank you — our team will review it." });
+    } catch {
+      toast({ title: "Failed to report post", variant: "destructive" });
+    }
+  };
+
+  const handleBlock = async () => {
+    if (!isAuthenticated || !user) { navigate("/login"); return; }
+    setShowMenu(false);
+    try {
+      await blockUser(user.id, post.authorId);
+      setDeleted(true);
+      queryClient.invalidateQueries({ queryKey: ["/api/posts"] });
+      toast({ title: `${post.authorName} blocked`, description: "You won't see their posts anymore." });
+    } catch {
+      toast({ title: "Failed to block user", variant: "destructive" });
     }
   };
 
@@ -91,14 +204,16 @@ const PostCard = ({ post }: PostCardProps) => {
     if (mins < 60) return `${mins}m ago`;
     const hrs = Math.floor(mins / 60);
     if (hrs < 24) return `${hrs}h ago`;
-    const days = Math.floor(hrs / 24);
-    return `${days}d ago`;
+    return `${Math.floor(hrs / 24)}d ago`;
   };
+
+  if (deleted) return null;
 
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="harvest-card overflow-hidden">
+      {/* Header */}
       <div className="flex items-center gap-3 p-4 pb-2">
-        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary overflow-hidden">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary overflow-hidden">
           {post.authorAvatar?.startsWith("http") ? (
             <img src={post.authorAvatar} alt={post.authorName} className="h-full w-full object-cover rounded-full" />
           ) : (
@@ -106,23 +221,90 @@ const PostCard = ({ post }: PostCardProps) => {
           )}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-foreground">{post.authorName}</p>
+          <p className="text-sm font-semibold text-foreground truncate">{post.authorName}</p>
           <p className="text-[11px] text-muted-foreground">
             {post.authorLocation && `${post.authorLocation} · `}{timeAgo(post.createdAt)}
+            {post.communityName && <span className="ml-1 text-primary">· {post.communityName}</span>}
           </p>
         </div>
-        {post.tag && (
-          <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">{post.tag}</span>
-        )}
+
+        <div className="flex items-center gap-1.5">
+          {post.tag && (
+            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">{post.tag}</span>
+          )}
+          <div className="relative">
+            <button
+              onClick={() => setShowMenu(!showMenu)}
+              className="flex h-7 w-7 items-center justify-center rounded-full hover:bg-muted transition-colors"
+            >
+              <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
+            </button>
+            <AnimatePresence>
+              {showMenu && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowMenu(false)} />
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95, y: -4 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95, y: -4 }}
+                    transition={{ duration: 0.12 }}
+                    className="absolute right-0 top-8 z-50 min-w-[160px] rounded-xl border bg-card shadow-lg p-1"
+                  >
+                    <button onClick={handleShare} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm hover:bg-muted transition-colors">
+                      <Share2 className="h-4 w-4 text-muted-foreground" /> Repost
+                    </button>
+                    <button onClick={handleCopyLink} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm hover:bg-muted transition-colors">
+                      <ExternalLink className="h-4 w-4 text-muted-foreground" /> Copy link
+                    </button>
+                    {isOwner && (
+                      <button onClick={handleDelete} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-destructive hover:bg-destructive/10 transition-colors">
+                        <Trash2 className="h-4 w-4" /> Delete post
+                      </button>
+                    )}
+                    {!isOwner && (
+                      <>
+                        <div className="my-1 h-px bg-border" />
+                        <button onClick={handleReport} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-muted transition-colors">
+                          <Flag className="h-4 w-4" /> Report
+                        </button>
+                        <button onClick={handleBlock} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-destructive hover:bg-destructive/10 transition-colors">
+                          <Ban className="h-4 w-4" /> Block user
+                        </button>
+                      </>
+                    )}
+                  </motion.div>
+                </>
+              )}
+            </AnimatePresence>
+          </div>
+        </div>
       </div>
 
-      <div className="px-4 pb-3">
-        <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{post.text}</p>
-        {post.imageUrl && (
-          <img src={post.imageUrl} alt="" className="mt-3 w-full rounded-lg object-cover max-h-64" />
-        )}
-      </div>
+      {/* Shared post attribution */}
+      {post.sharedFromId && (
+        <div className="mx-4 mb-2 rounded-lg border bg-muted/40 p-3">
+          <p className="text-[11px] font-medium text-muted-foreground mb-1">
+            Originally by {post.sharedFromAuthorName}
+          </p>
+          <p className="text-xs text-foreground leading-relaxed line-clamp-3">
+            {post.sharedFromText}
+          </p>
+        </div>
+      )}
 
+      {/* Content */}
+      {post.text && (
+        <div className="px-4 pb-3">
+          <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{post.text}</p>
+        </div>
+      )}
+      {post.imageUrl && (
+        <div className="px-4 pb-3">
+          <img src={post.imageUrl} alt="" className="w-full rounded-lg object-cover max-h-64" />
+        </div>
+      )}
+
+      {/* Actions */}
       <div className="flex items-center gap-1 border-t px-4 py-2">
         <button
           onClick={() => handleReact("like")}
@@ -131,7 +313,7 @@ const PostCard = ({ post }: PostCardProps) => {
           }`}
         >
           <ThumbsUp className="h-3.5 w-3.5" />
-          {localLikes > 0 && localLikes}
+          {localLikes > 0 && <span>{localLikes}</span>}
         </button>
         <button
           onClick={() => handleReact("dislike")}
@@ -146,10 +328,11 @@ const PostCard = ({ post }: PostCardProps) => {
           className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted"
         >
           <MessageCircle className="h-3.5 w-3.5" />
-          {post.comments > 0 && post.comments}
+          {post.comments > 0 && <span>{post.comments}</span>}
         </button>
       </div>
 
+      {/* Comments */}
       <AnimatePresence>
         {showComments && (
           <motion.div

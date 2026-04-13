@@ -1,11 +1,6 @@
 /**
- * Data Service Layer
- * 
- * This module centralizes all data access for the Harvest platform.
- * Currently uses in-memory storage (localStorage for persistence).
- * Designed to be swapped with Supabase client calls when backend is connected.
- * 
- * To connect Supabase: replace each function body with supabase.from('table').select/insert/update/delete
+ * Data Service Layer — types + localStorage fallbacks
+ * All Supabase operations live in supabaseService.ts
  */
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -39,6 +34,11 @@ export interface Post {
   comments: number;
   createdAt: string;
   reported: boolean;
+  communityId?: string;
+  communityName?: string;
+  sharedFromId?: string;
+  sharedFromAuthorName?: string;
+  sharedFromText?: string;
 }
 
 export interface Comment {
@@ -57,6 +57,38 @@ export interface Reaction {
   postId: string;
   userId: string;
   type: "like" | "dislike";
+}
+
+export interface Community {
+  id: string;
+  name: string;
+  description: string;
+  emoji: string;
+  creatorId: string;
+  membersCount: number;
+  isPrivate: boolean;
+  createdAt: string;
+  memberRole?: "admin" | "member" | null;
+}
+
+export interface CommunityMember {
+  id: string;
+  communityId: string;
+  userId: string;
+  role: "admin" | "member";
+  joinedAt: string;
+  profile?: {
+    name: string;
+    avatar: string;
+    location: string;
+  };
+}
+
+export interface UserBlock {
+  id: string;
+  blockerId: string;
+  blockedId: string;
+  createdAt: string;
 }
 
 export interface MarketplaceListing {
@@ -180,7 +212,7 @@ function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
-// ─── Auth (stub for future Supabase auth) ────────────────────────────────────
+// ─── Auth ─────────────────────────────────────────────────────────────────────
 
 export function getCurrentUser(): User | null {
   try {
@@ -200,28 +232,21 @@ export function setCurrentUser(user: User | null) {
 }
 
 export function isAdmin(): boolean {
-  const user = getCurrentUser();
-  return user?.role === "admin";
+  return getCurrentUser()?.role === "admin";
 }
 
 export function isLoggedIn(): boolean {
   return getCurrentUser() !== null;
 }
 
-// Admin login - in production, this will use Supabase auth
 export function adminLogin(email: string, password: string): { success: boolean; error?: string } {
-  // This is a placeholder. In production, authenticate via Supabase.
-  // For now, check localStorage admin accounts
   const users = getStore<User>("users");
   const admin = users.find((u) => u.email === email && u.role === "admin");
-  if (admin) {
-    setCurrentUser(admin);
-    return { success: true };
-  }
+  if (admin) { setCurrentUser(admin); return { success: true }; }
   return { success: false, error: "Invalid admin credentials" };
 }
 
-// ─── Posts ────────────────────────────────────────────────────────────────────
+// ─── Posts (localStorage fallback) ───────────────────────────────────────────
 
 export function getPosts(): Post[] {
   return getStore<Post>("posts").sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -252,18 +277,14 @@ export function createComment(comment: Omit<Comment, "id" | "createdAt" | "repor
   setStore("comments", comments);
   const posts = getStore<Post>("posts");
   const postIdx = posts.findIndex((p) => p.id === comment.postId);
-  if (postIdx !== -1) {
-    posts[postIdx].comments = (posts[postIdx].comments || 0) + 1;
-    setStore("posts", posts);
-  }
+  if (postIdx !== -1) { posts[postIdx].comments = (posts[postIdx].comments || 0) + 1; setStore("posts", posts); }
   return newComment;
 }
 
 // ─── Reactions ───────────────────────────────────────────────────────────────
 
 export function getUserReaction(postId: string, userId: string): "like" | "dislike" | null {
-  const reaction = getStore<Reaction>("reactions").find((r) => r.postId === postId && r.userId === userId);
-  return reaction?.type ?? null;
+  return getStore<Reaction>("reactions").find((r) => r.postId === postId && r.userId === userId)?.type ?? null;
 }
 
 export function toggleReaction(postId: string, userId: string, type: "like" | "dislike") {
@@ -271,7 +292,6 @@ export function toggleReaction(postId: string, userId: string, type: "like" | "d
   const existing = reactions.findIndex((r) => r.postId === postId && r.userId === userId);
   const posts = getStore<Post>("posts");
   const postIdx = posts.findIndex((p) => p.id === postId);
-
   if (existing !== -1) {
     const prev = reactions[existing].type;
     if (prev === type) {
@@ -288,12 +308,11 @@ export function toggleReaction(postId: string, userId: string, type: "like" | "d
     reactions.push({ id: generateId(), postId, userId, type });
     if (postIdx !== -1 && type === "like") posts[postIdx].likes = (posts[postIdx].likes || 0) + 1;
   }
-
   setStore("reactions", reactions);
   setStore("posts", posts);
 }
 
-// ─── Notification Create ─────────────────────────────────────────────────────
+// ─── Notifications ───────────────────────────────────────────────────────────
 
 export function createNotification(notification: Omit<Notification, "id" | "createdAt" | "read">): Notification {
   const n: Notification = { ...notification, id: generateId(), createdAt: new Date().toISOString(), read: false };
@@ -301,6 +320,19 @@ export function createNotification(notification: Omit<Notification, "id" | "crea
   all.push(n);
   setStore("notifications", all);
   return n;
+}
+
+export function getNotifications(userId?: string): Notification[] {
+  const all = getStore<Notification>("notifications");
+  return (userId ? all.filter((n) => n.userId === userId) : all).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+export function markNotificationRead(id: string) {
+  setStore("notifications", getStore<Notification>("notifications").map((n) => n.id === id ? { ...n, read: true } : n));
+}
+
+export function markAllNotificationsRead(userId: string) {
+  setStore("notifications", getStore<Notification>("notifications").map((n) => n.userId === userId ? { ...n, read: true } : n));
 }
 
 // ─── Marketplace ─────────────────────────────────────────────────────────────
@@ -327,128 +359,72 @@ export function updateListing(id: string, updates: Partial<MarketplaceListing>) 
 
 // ─── Experts ─────────────────────────────────────────────────────────────────
 
-export function getExperts(): Expert[] {
-  return getStore<Expert>("experts");
-}
-
+export function getExperts(): Expert[] { return getStore<Expert>("experts"); }
 export function createExpert(expert: Omit<Expert, "id" | "approved">): Expert {
   const newExpert: Expert = { ...expert, id: generateId(), approved: false };
-  const experts = getStore<Expert>("experts");
-  experts.push(newExpert);
-  setStore("experts", experts);
-  return newExpert;
+  const experts = getStore<Expert>("experts"); experts.push(newExpert); setStore("experts", experts); return newExpert;
 }
-
 export function updateExpert(id: string, updates: Partial<Expert>) {
   setStore("experts", getStore<Expert>("experts").map((e) => e.id === id ? { ...e, ...updates } : e));
 }
-
-export function deleteExpert(id: string) {
-  setStore("experts", getStore<Expert>("experts").filter((e) => e.id !== id));
-}
+export function deleteExpert(id: string) { setStore("experts", getStore<Expert>("experts").filter((e) => e.id !== id)); }
 
 // ─── Alerts ──────────────────────────────────────────────────────────────────
 
 export function getAlerts(): Alert[] {
   return getStore<Alert>("alerts").filter((a) => a.active).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
-
 export function getAllAlerts(): Alert[] {
   return getStore<Alert>("alerts").sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
-
 export function createAlert(alert: Omit<Alert, "id" | "createdAt" | "active">): Alert {
   const newAlert: Alert = { ...alert, id: generateId(), createdAt: new Date().toISOString(), active: true };
-  const alerts = getStore<Alert>("alerts");
-  alerts.push(newAlert);
-  setStore("alerts", alerts);
-  return newAlert;
+  const alerts = getStore<Alert>("alerts"); alerts.push(newAlert); setStore("alerts", alerts); return newAlert;
 }
-
 export function updateAlert(id: string, updates: Partial<Alert>) {
   setStore("alerts", getStore<Alert>("alerts").map((a) => a.id === id ? { ...a, ...updates } : a));
 }
-
-export function deleteAlert(id: string) {
-  setStore("alerts", getStore<Alert>("alerts").filter((a) => a.id !== id));
-}
+export function deleteAlert(id: string) { setStore("alerts", getStore<Alert>("alerts").filter((a) => a.id !== id)); }
 
 // ─── Articles ────────────────────────────────────────────────────────────────
 
 export function getArticles(): Article[] {
   return getStore<Article>("articles").filter((a) => a.published).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
-
 export function getAllArticles(): Article[] {
   return getStore<Article>("articles").sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
-
 export function createArticle(article: Omit<Article, "id" | "createdAt">): Article {
   const newArticle: Article = { ...article, id: generateId(), createdAt: new Date().toISOString() };
-  const articles = getStore<Article>("articles");
-  articles.push(newArticle);
-  setStore("articles", articles);
-  return newArticle;
+  const articles = getStore<Article>("articles"); articles.push(newArticle); setStore("articles", articles); return newArticle;
 }
-
 export function updateArticle(id: string, updates: Partial<Article>) {
   setStore("articles", getStore<Article>("articles").map((a) => a.id === id ? { ...a, ...updates } : a));
 }
-
-export function deleteArticle(id: string) {
-  setStore("articles", getStore<Article>("articles").filter((a) => a.id !== id));
-}
-
-// ─── Notifications ───────────────────────────────────────────────────────────
-
-export function getNotifications(userId?: string): Notification[] {
-  const all = getStore<Notification>("notifications");
-  return (userId ? all.filter((n) => n.userId === userId) : all).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-}
-
-export function markNotificationRead(id: string) {
-  setStore("notifications", getStore<Notification>("notifications").map((n) => n.id === id ? { ...n, read: true } : n));
-}
-
-export function markAllNotificationsRead(userId: string) {
-  setStore("notifications", getStore<Notification>("notifications").map((n) => n.userId === userId ? { ...n, read: true } : n));
-}
-
-// ─── Groups ──────────────────────────────────────────────────────────────────
-
-export function getGroups(): CommunityGroup[] {
-  return getStore<CommunityGroup>("groups");
-}
+export function deleteArticle(id: string) { setStore("articles", getStore<Article>("articles").filter((a) => a.id !== id)); }
 
 // ─── Users (Admin) ───────────────────────────────────────────────────────────
 
-export function getUsers(): User[] {
-  return getStore<User>("users");
-}
-
+export function getUsers(): User[] { return getStore<User>("users"); }
 export function updateUser(id: string, updates: Partial<User>) {
   const users = getStore<User>("users");
   setStore("users", users.map((u) => u.id === id ? { ...u, ...updates } : u));
-  // Update current user if it's the same
   const current = getCurrentUser();
-  if (current?.id === id) {
-    setCurrentUser({ ...current, ...updates });
-  }
+  if (current?.id === id) setCurrentUser({ ...current, ...updates });
 }
-
 export function deleteUser(id: string) {
   setStore("users", getStore<User>("users").filter((u) => u.id !== id));
   const current = getCurrentUser();
   if (current?.id === id) setCurrentUser(null);
 }
-
 export function createUser(user: Omit<User, "id" | "createdAt" | "suspended">): User {
   const newUser: User = { ...user, id: generateId(), createdAt: new Date().toISOString(), suspended: false };
-  const users = getStore<User>("users");
-  users.push(newUser);
-  setStore("users", users);
-  return newUser;
+  const users = getStore<User>("users"); users.push(newUser); setStore("users", users); return newUser;
 }
+
+// ─── Groups ──────────────────────────────────────────────────────────────────
+
+export function getGroups(): CommunityGroup[] { return getStore<CommunityGroup>("groups"); }
 
 // ─── Farm Activities ─────────────────────────────────────────────────────────
 
@@ -456,15 +432,11 @@ export function getFarmActivities(userId?: string): FarmActivity[] {
   const all = getStore<FarmActivity>("farm_activities");
   return userId ? all.filter((a) => a.userId === userId) : all;
 }
-
 export function createFarmActivity(activity: Omit<FarmActivity, "id">): FarmActivity {
   const newActivity: FarmActivity = { ...activity, id: generateId() };
   const activities = getStore<FarmActivity>("farm_activities");
-  activities.push(newActivity);
-  setStore("farm_activities", activities);
-  return newActivity;
+  activities.push(newActivity); setStore("farm_activities", activities); return newActivity;
 }
-
 export function updateFarmActivity(id: string, updates: Partial<FarmActivity>) {
   setStore("farm_activities", getStore<FarmActivity>("farm_activities").map((a) => a.id === id ? { ...a, ...updates } : a));
 }
@@ -498,48 +470,35 @@ export function searchPlatform(query: string): SearchResult[] {
   if (!query.trim()) return [];
   const q = query.toLowerCase();
   const results: SearchResult[] = [];
-
   getUsers().forEach((u) => {
-    if (u.name.toLowerCase().includes(q) || u.location.toLowerCase().includes(q)) {
+    if (u.name.toLowerCase().includes(q) || u.location.toLowerCase().includes(q))
       results.push({ id: u.id, category: "Farmers", title: u.name, subtitle: `${u.location} · ${u.farmingActivities.join(", ")}`, extra: `${u.followers} followers` });
-    }
   });
-
   getPosts().forEach((p) => {
-    if (p.text.toLowerCase().includes(q) || p.authorName.toLowerCase().includes(q)) {
+    if (p.text.toLowerCase().includes(q) || p.authorName.toLowerCase().includes(q))
       results.push({ id: p.id, category: "Posts", title: p.text.slice(0, 60) + (p.text.length > 60 ? "..." : ""), subtitle: `Posted by ${p.authorName}` });
-    }
   });
-
   getGroups().forEach((g) => {
-    if (g.name.toLowerCase().includes(q)) {
+    if (g.name.toLowerCase().includes(q))
       results.push({ id: g.id, category: "Groups", title: g.name, subtitle: `${g.members.toLocaleString()} members` });
-    }
   });
-
   getListings().forEach((l) => {
-    if (l.title.toLowerCase().includes(q) || l.category.toLowerCase().includes(q)) {
+    if (l.title.toLowerCase().includes(q) || l.category.toLowerCase().includes(q))
       results.push({ id: l.id, category: "Marketplace", title: l.title, subtitle: `${l.price} · ${l.location}` });
-    }
   });
-
   getExperts().filter((e) => e.approved).forEach((e) => {
-    if (e.name.toLowerCase().includes(q) || e.specialization.toLowerCase().includes(q)) {
+    if (e.name.toLowerCase().includes(q) || e.specialization.toLowerCase().includes(q))
       results.push({ id: e.id, category: "Experts", title: e.name, subtitle: `${e.specialization} · ${e.location}` });
-    }
   });
-
   getArticles().forEach((a) => {
-    if (a.title.toLowerCase().includes(q) || a.tag.toLowerCase().includes(q)) {
+    if (a.title.toLowerCase().includes(q) || a.tag.toLowerCase().includes(q))
       results.push({ id: a.id, category: "Articles", title: a.title, subtitle: `${a.readTime} read` });
-    }
   });
-
   return results;
 }
 
-// ─── Initialize app (no hardcoded seed data) ─────────────────────────────────
-// Admin accounts are managed via Supabase — set role = 'admin' in the profiles table
+// ─── Initialize ───────────────────────────────────────────────────────────────
+
 export function initializeApp() {
-  // No hardcoded users or seed data — all content comes from real users via Supabase
+  // No hardcoded seed data — all content comes from Supabase
 }

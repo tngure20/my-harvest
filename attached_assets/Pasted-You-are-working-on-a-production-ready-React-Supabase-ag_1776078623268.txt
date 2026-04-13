@@ -1,0 +1,34 @@
+You are working on a production-ready React + Supabase agricultural platform called Harvest. The social system (posts, comments, communities, reactions, sharing) is currently unreliable and partially broken. Your task is to fully audit, fix, and complete the entire social interaction system so it works consistently, persists data correctly, and scales logically.
+
+Start by identifying and fixing all issues related to posting, commenting, reacting, and sharing. Ensure that when a user creates a post, it is immediately saved to Supabase, reflected in the UI without requiring refresh, and persists across sessions and devices. Comments must be correctly linked to posts via foreign keys, load efficiently, and update in real time after submission. Reactions (likes, etc.) must be idempotent (no duplicates per user) and update counts correctly.
+
+Fix the sharing system so that posts can be shared within the platform (reposts) and optionally copied as links. Shared posts should retain attribution to the original creator and maintain proper relational structure in the database.
+
+Rebuild the community system to be fully functional. Users must be able to create communities, join communities, leave communities, and view community-specific feeds. Implement proper membership tracking using a join table (community_members). Ensure that users only see content from communities they belong to when filtering by community.
+
+Add full admin functionality for community creators. Community admins should be able to:
+
+* Edit community details (name, description)
+* Delete the community
+* Remove members
+* Promote other members to admin (optional but recommended)
+
+Implement a blocking system at two levels. First, users should be able to block other users, which prevents seeing their posts, comments, or interactions. Second, users should be able to mute or block communities, removing them from their feed. Ensure blocked relationships are enforced at the query level, not just hidden in the UI.
+
+Fix all storage and persistence issues across the platform. All social data (posts, comments, reactions, communities, memberships) must be stored in Supabase tables, not localStorage. LocalStorage should only be used for temporary caching or offline support. Ensure proper synchronization between local cache and Supabase when reconnecting.
+
+Audit the existing Supabase schema and enforce proper relationships:
+
+* posts → user_id (foreign key to profiles)
+* comments → post_id, user_id
+* reactions → post_id, user_id (unique constraint)
+* communities → creator_id
+* community_members → user_id, community_id, role
+
+Ensure all queries use optimized fetching (joins or batched queries) and are integrated with React Query for caching and revalidation. Eliminate redundant or duplicate data fetching.
+
+Implement error handling across all social features using existing ErrorBoundary and systemLogger. Ensure failures do not silently break the UI and provide fallback states (EmptyState components where appropriate).
+
+Finally, ensure the UI reflects all changes immediately using optimistic updates where possible, with rollback on failure. The entire social system should feel responsive, consistent, and reliable across navigation, refresh, and different devices.
+
+Do not mock data. Do not use placeholder logic. All features must be fully connected to Supabase and production-ready.
