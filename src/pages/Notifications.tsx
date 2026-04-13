@@ -119,24 +119,13 @@ const Notifications = () => {
                       notif.read ? "bg-transparent hover:bg-muted/50" : "bg-primary/5 hover:bg-primary/10"
                     }`}
                   >
-                    {notif.avatar ? (
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary overflow-hidden">
-                        {notif.avatar.startsWith("http") ? (
-                          <img src={notif.avatar} alt="" className="h-full w-full object-cover rounded-full" />
-                        ) : (
-                          notif.avatar
-                        )}
-                      </div>
-                    ) : (
-                      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${color}`}>
-                        <Icon className="h-4 w-4" />
-                      </div>
-                    )}
+                    {/* notifications table has no avatar_url — always use icon */}
+                    <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${color}`}>
+                      <Icon className="h-4 w-4" />
+                    </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm text-foreground">
-                        <span className="font-semibold">{notif.title}</span>{" "}
-                        {notif.message}
-                      </p>
+                      {/* notifications table has no title — message is the full text */}
+                      <p className="text-sm text-foreground">{notif.message}</p>
                       <p className="mt-0.5 text-[11px] text-muted-foreground">
                         {new Date(notif.createdAt).toLocaleDateString("en-KE", {
                           month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
