@@ -1,4 +1,3 @@
-Replace or refactor your server/index.ts into this:
 
 import express from "express";
 import cors from "cors";
