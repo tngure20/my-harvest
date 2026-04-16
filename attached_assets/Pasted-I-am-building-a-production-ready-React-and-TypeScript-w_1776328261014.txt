@@ -1,0 +1,21 @@
+I am building a production-ready React and TypeScript web application called Harvest using Vite. It is designed for Kenyan and East African farmers and already has a well-organized frontend architecture with services under /src/services. Supabase is used for backend functionality, and the app includes an existing aiService.ts file that I want to extend, not replace.
+
+I need you to implement a robust AI service layer that integrates with the Hugging Face Inference API using an API key stored in the environment variable VITE_HF_API_KEY. This AI layer must support both text-based inference and image-based inference. The text functionality will be used for farming advice, diagnosis explanations, and general Q&A, while the image functionality will be used for crop disease detection and livestock condition analysis based on uploaded images.
+
+The implementation must stay consistent with the current architecture and remain fully frontend-based with no backend server. All logic should live inside /src/services/aiService.ts, and the code should be modular, typed, and production-ready. Do not break any existing functionality.
+
+For text inference, create a function that accepts user input along with structured farming context such as crop or livestock type, user location, and season (for example long rains, short rains, or dry season). This function should call a Hugging Face text generation or instruction model and return a structured response that includes the generated message, a confidence level categorized as high, medium, or low, and a list of actionable next steps extracted from the response. The output should be practical, concise, and relevant to smallholder farmers.
+
+For image inference, create a function that accepts an uploaded image file and optional farming context. This function should send the image to a Hugging Face image classification or vision model and return predicted labels with confidence scores. Based on these predictions, generate simple, actionable farming advice. The response should also include confidence levels and be easy for non-technical users to understand.
+
+All Hugging Face API calls must use the fetch API with proper async and error handling. The authorization header must include the bearer token from the environment variable. Model names should be configurable at the top of the service file so they can be easily changed later.
+
+You must also implement a fallback mechanism بحيث if the Hugging Face API fails, times out, or returns an invalid response, the system automatically falls back to the local knowledge base in /src/lib/agricultureKnowledge.ts. The fallback response should still be useful but marked with a lower confidence level and clearly identified as coming from a fallback source.
+
+Standardize all AI responses into a consistent object structure that includes a message string, a confidence level, a list of next steps, and a source field indicating whether the response came from Hugging Face or the fallback system. For image-based responses, also include a predictions array with labels and confidence scores.
+
+Prompts sent to the AI models must always include farming context such as crop or livestock type, regional relevance to Kenya or East Africa, and seasonal conditions. The tone of responses should be practical, step-by-step where possible, and tailored to real farming conditions rather than generic advice.
+
+Include basic performance considerations such as request timeout handling and optional lightweight caching using memory or localStorage. Avoid overly long or overly technical responses.
+
+Finally, provide the full implementation of aiService.ts along with any helper functions needed, and include an example of how it would be used inside FarmAssistant.tsx. The code should follow modern React and TypeScript best practices and integrate cleanly into the existing project without introducing unnecessary complexity.
