@@ -11,7 +11,7 @@ import { useNavigate } from "react-router-dom";
 import { fetchFarmActivities } from "@/lib/supabaseService";
 import { useQuery } from "@tanstack/react-query";
 import type { GuidanceResponse, KnowledgeSource, AssistantMode } from "@/lib/agricultureKnowledge";
-import type { AIResponse, FarmingContext } from "@/services/aiService";
+import type { AIResponse, FarmingContext, TrustedResource } from "@/services/aiService";
 import { queryAI, analyzeImage, queryActivityAdvice } from "@/services/aiService";
 import ReactMarkdown from "react-markdown";
 
@@ -118,14 +118,32 @@ const ConfidenceBadge = ({ level, source }: { level: AIResponse["confidence"]; s
   );
 };
 
+/** Render a single trusted resource link */
+const ResourceLink = ({ resource }: { resource: TrustedResource }) => (
+  <a
+    href={resource.url}
+    target="_blank"
+    rel="noopener noreferrer"
+    className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium text-primary hover:bg-muted transition-colors"
+  >
+    <ExternalLink className="h-2.5 w-2.5" />
+    {resource.name}
+  </a>
+);
+
 /** Card for rendering a structured AIResponse (HF or fallback) */
 const AIResponseCard = ({ aiResponse }: { aiResponse: AIResponse }) => {
-  // If this is a fallback with a full guidance object, render the rich GuidanceCard
+  // Fallback with full guidance object — render the rich GuidanceCard
   if (aiResponse.guidance) {
     return (
       <div className="space-y-2">
         <ConfidenceBadge level={aiResponse.confidence} source={aiResponse.source} />
         <GuidanceCard guidance={aiResponse.guidance} />
+        {aiResponse.resources && aiResponse.resources.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 pt-1">
+            {aiResponse.resources.map((r, i) => <ResourceLink key={i} resource={r} />)}
+          </div>
+        )}
       </div>
     );
   }
@@ -133,6 +151,13 @@ const AIResponseCard = ({ aiResponse }: { aiResponse: AIResponse }) => {
   return (
     <div className="space-y-3">
       <ConfidenceBadge level={aiResponse.confidence} source={aiResponse.source} />
+
+      {/* Weather context badge */}
+      {aiResponse.weatherSummary && (
+        <p className="text-[10px] text-muted-foreground bg-muted/40 rounded-lg px-2 py-1 leading-relaxed">
+          📍 {aiResponse.weatherSummary.split(".").slice(0, 2).join(".")}
+        </p>
+      )}
 
       <div className="prose prose-sm dark:prose-invert max-w-none">
         <ReactMarkdown>{aiResponse.message}</ReactMarkdown>
@@ -171,6 +196,13 @@ const AIResponseCard = ({ aiResponse }: { aiResponse: AIResponse }) => {
               </li>
             ))}
           </ol>
+        </div>
+      )}
+
+      {/* Trusted resources */}
+      {aiResponse.resources && aiResponse.resources.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {aiResponse.resources.map((r, i) => <ResourceLink key={i} resource={r} />)}
         </div>
       )}
 

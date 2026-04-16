@@ -1,0 +1,171 @@
+I am building a production-ready React + TypeScript (Vite) application called Harvest for Kenyan and East African farmers. The app already includes a structured frontend architecture and an existing `aiService.ts` that integrates with Hugging Face models for text and image inference.
+
+I want you to significantly upgrade and refine the AI system into a **robust, context-aware, retrieval-augmented AI layer** that produces reliable, practical farming advice and avoids weak or generic responses.
+
+The system must remain fully frontend-based and continue using the Hugging Face Inference API with the environment variable `VITE_HF_API_KEY`.
+
+---
+
+The AI system must now follow a **retrieval + generation architecture (RAG)** instead of relying purely on direct model responses or simple fallback logic.
+
+Use the model `sentence-transformers/all-MiniLM-L6-v2` to generate embeddings for both:
+
+* user queries
+* entries in `/src/lib/agricultureKnowledge.ts`
+
+At runtime:
+
+* Convert the user query into an embedding
+* Perform semantic similarity search against the knowledge base
+* Retrieve the top 3–5 most relevant entries
+* Inject this retrieved context into the prompt sent to the text model
+
+This retrieved knowledge must always be used to **ground the AI response**, reducing hallucinations and improving relevance.
+
+---
+
+For text generation, continue using `mistralai/Mistral-7B-Instruct-v0.3`.
+
+However, you must enforce a **strict response structure** in the prompt so that outputs are always:
+
+1. A short, clear answer or diagnosis
+2. A simple explanation in non-technical language
+3. 3–5 actionable farming steps
+4. Optional extra tips (clearly separated)
+5. Optional external resources (only from a predefined trusted list)
+
+Explicitly instruct the model to:
+
+* Use simple language suitable for smallholder farmers
+* Avoid jargon unless absolutely necessary
+* Be practical and actionable rather than theoretical
+
+---
+
+For image analysis:
+
+* Continue using `linkanjarad/mobilenet_v2_1.0_224-plant-disease-identification` as the primary model
+* Use `google/vit-base-patch16-224` as a fallback model
+
+Add a **confidence threshold system**:
+
+* If top prediction confidence is below 0.6, do NOT produce a diagnosis
+* Instead return a response asking for a clearer image with guidance
+
+When predictions are valid:
+
+* Map model labels to user-friendly explanations
+* Pass structured prediction results into the text model for interpretation
+
+---
+
+Implement a **response validation layer** after every Hugging Face call:
+
+If the response:
+
+* is too short
+* lacks actionable steps
+* is vague or generic
+
+Then:
+
+* retry once with a stronger prompt and more retrieved context
+* only fall back if the second attempt fails
+
+---
+
+Replace the current fallback system with a **smart fallback**:
+
+Fallback should:
+
+* still use semantic retrieval from the knowledge base
+* generate a structured response using retrieved entries
+* clearly mark:
+
+  * `source: "fallback"`
+  * `confidence: "medium"`
+
+Avoid returning raw or hardcoded paragraphs. All responses must feel AI-assisted and structured.
+
+---
+
+Integrate **location and weather context** into the AI pipeline:
+
+* Use a trusted weather API (such as OpenWeatherMap or WeatherAPI)
+* Detect user location via browser geolocation (with fallback to IP-based lookup)
+* Extract:
+
+  * country (focus on Kenya/East Africa)
+  * county or region
+  * current weather conditions (rain, temperature, humidity)
+
+Inject this data into the AI prompt so responses adapt to:
+
+* current season (long rains, short rains, dry season)
+* real weather conditions
+
+Weather integration should enhance advice (e.g. irrigation, disease risk), but the primary focus remains the AI reasoning system.
+
+---
+
+Implement **trusted external resource linking**:
+
+* Maintain a predefined list of trusted agricultural sources (e.g. FAO, Kenya Ministry of Agriculture)
+* The AI must only reference links from this list
+* Only include links when:
+
+  * the topic is complex
+  * or the user needs deeper guidance
+
+---
+
+Improve caching strategy:
+
+* Cache embeddings for repeated queries
+* Cache retrieval results
+* Cache AI responses (short TTL, e.g. 5 minutes)
+
+Ensure cache keys include:
+
+* query
+* location
+* farm type
+
+---
+
+Standardize all responses into this structure:
+
+```ts
+{
+  message: string,
+  confidence: "high" | "medium" | "low",
+  nextSteps: string[],
+  source: "huggingface" | "fallback",
+  model: string,
+  predictions?: { label: string; confidence: number }[]
+}
+```
+
+---
+
+Important constraints:
+
+* Do NOT introduce a backend server
+* Keep everything inside `/src/services/aiService.ts` or small helper modules
+* Maintain compatibility with existing UI components (FarmAssistant.tsx)
+* Ensure clean, modular, production-quality TypeScript code
+
+---
+
+Finally, generate:
+
+1. Updated `aiService.ts` with:
+
+   * embedding + retrieval logic
+   * improved prompt builder
+   * validation + retry system
+   * smarter fallback
+2. Any helper utilities required (embedding, similarity search, cache handling)
+3. Example integration showing how FarmAssistant uses the improved AI system
+
+The final system should feel reliable, context-aware, and practical for real farmers, not like a generic AI chatbot.

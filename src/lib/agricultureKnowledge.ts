@@ -630,7 +630,32 @@ export function getGuidance(query: string, mode: AssistantMode): GuidanceRespons
  * In production, this would call an AI model with the activity data as context.
  */
 export function getActivityAdvice(activityType: string, species: string): GuidanceResponse {
-  // Try to match on species first, then activity type
   const query = `${species} ${activityType}`.toLowerCase();
   return getGuidance(query, "advice");
+}
+
+// ─── RAG Corpus Export ────────────────────────────────────────────────────────
+
+export interface CorpusEntry {
+  id: string;
+  /** Embeddable text: title + keywords + summary combined for semantic search */
+  text: string;
+  guidance: GuidanceResponse;
+}
+
+/**
+ * Returns all knowledge base entries as embeddable corpus entries for RAG.
+ * Combines knowledgeBase, diagnosisBase, and planningBase into one flat list.
+ */
+export function getKnowledgeCorpus(): CorpusEntry[] {
+  const allEntries: { keywords: string[]; response: GuidanceResponse }[] = [
+    ...knowledgeBase,
+    ...diagnosisBase,
+    ...planningBase,
+  ];
+  return allEntries.map((entry, i) => ({
+    id: String(i),
+    text: `${entry.response.title}. Keywords: ${entry.keywords.join(", ")}. ${entry.response.summary}`,
+    guidance: entry.response,
+  }));
 }
