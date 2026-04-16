@@ -5,20 +5,22 @@
  *  1. RETRIEVE  — embed user query, find top-3 semantically similar
  *                 entries from the local knowledge base (RAG)
  *  2. GENERATE  — inject retrieved knowledge + weather context into
- *                 a structured prompt sent to Mistral-7B via HF
+ *                 a structured prompt sent to Mistral-7B via backend
  *  3. VALIDATE  — verify response quality; retry once if weak
- *  4. FALLBACK  — if HF fails, build a structured response from
+ *  4. FALLBACK  — if backend fails, build a structured response from
  *                 retrieved knowledge (never returns raw text)
  *
- * Environment variable: VITE_HF_API_KEY
+ * All AI model calls are routed through the Supabase Edge Function
+ * ai-gateway. NO API keys are used or stored in the frontend.
  */
 
 import { getGuidance, getKnowledgeCorpus } from "@/lib/agricultureKnowledge";
 import type { GuidanceResponse, AssistantMode, CorpusEntry } from "@/lib/agricultureKnowledge";
 import { retrieveTopK, clearEmbeddingCache } from "@/services/embeddingService";
 import { getWeatherContext, weatherToPromptString } from "@/services/weatherService";
+import { supabase } from "@/services/supabaseClient";
 
-// ─── Model Configuration ──────────────────────────────────────────────────────
+// ─── Model names (for display / logging only — actual calls go through backend) ─
 
 const MODELS = {
   text:         "mistralai/Mistral-7B-Instruct-v0.3",
@@ -26,10 +28,39 @@ const MODELS = {
   plantDisease: "linkanjarad/mobilenet_v2_1.0_224-plant-disease-identification",
 } as const;
 
-const HF_BASE              = "https://api-inference.huggingface.co";
-const REQUEST_TIMEOUT_MS   = 25_000;
 const RESPONSE_CACHE_TTL   = 5 * 60 * 1000;  // 5 minutes
-const IMAGE_CONFIDENCE_MIN = 0.60;            // Threshold below which image is rejected
+const IMAGE_CONFIDENCE_MIN = 0.60;
+
+// ─── Backend API Helpers ──────────────────────────────────────────────────────
+
+async function callBackendText(prompt: string, maxTokens = 600, temperature = 0.35): Promise<string> {
+  const { data, error } = await supabase.functions.invoke("ai-gateway/text", {
+    body: { prompt, maxTokens, temperature },
+  });
+  if (error) throw new Error(`AI gateway error: ${error.message}`);
+  if (data?.error) {
+    if (data.error === "model_loading") throw new Error(`Model loading (~${data.estimated_time || 20}s)`);
+    throw new Error(`AI backend: ${data.error}`);
+  }
+  if (!data?.content) throw new Error("Empty response from AI backend");
+  return data.content;
+}
+
+async function callBackendImage(
+  file: File
+): Promise<{ label: string; score: number }[]> {
+  const buffer = await file.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+  const imageBase64 = btoa(String.fromCharCode(...bytes));
+
+  const { data, error } = await supabase.functions.invoke("ai-gateway/image", {
+    body: { imageBase64, contentType: file.type || "image/jpeg" },
+  });
+  if (error) throw new Error(`AI gateway image error: ${error.message}`);
+  if (data?.error) throw new Error(`AI image backend: ${data.error}`);
+  if (!data?.predictions) throw new Error("No predictions from backend");
+  return data.predictions;
+}
 
 // ─── Trusted External Resources ───────────────────────────────────────────────
 
@@ -49,10 +80,8 @@ const TRUSTED_RESOURCES: TrustedResource[] = [
   { name: "Kenya Meteorological Department", url: "https://meteo.go.ke",         topics: ["weather", "rain", "season", "forecast", "climate"] },
 ];
 
-/** Match trusted resources to a query based on keyword overlap */
 function matchResources(query: string, retrieved: CorpusEntry[]): TrustedResource[] {
   const q = query.toLowerCase();
-  // Collect topic words from the query and retrieved guidance titles
   const topicWords = [
     ...q.split(/\s+/),
     ...retrieved.flatMap((e) => e.guidance.title.toLowerCase().split(/\s+/)),
@@ -82,7 +111,6 @@ export interface AIResponse {
   predictions?: ImagePrediction[];
   resources?: TrustedResource[];
   weatherSummary?: string;
-  /** Present on fallback responses for rich GuidanceCard rendering */
   guidance?: GuidanceResponse;
 }
 
@@ -109,7 +137,6 @@ function getCached(key: string): AIResponse | null {
   const m = _cache.get(key);
   if (m && Date.now() < m.expiresAt) return { ...m.response };
   if (m) _cache.delete(key);
-  // Try localStorage
   try {
     const raw = localStorage.getItem(`harvest_ai_${key}`);
     if (!raw) return null;
@@ -137,20 +164,6 @@ export function clearAICache(): void {
 
 // ─── Shared Helpers ───────────────────────────────────────────────────────────
 
-function getApiKey(): string {
-  return import.meta.env.VITE_HF_API_KEY ?? "";
-}
-
-async function fetchWithTimeout(url: string, options: RequestInit): Promise<Response> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-  try {
-    return await fetch(url, { ...options, signal: controller.signal });
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
 function getCurrentSeason(): string {
   const m = new Date().getMonth() + 1;
   if (m >= 3 && m <= 5)   return "long rains season (March–May)";
@@ -160,10 +173,6 @@ function getCurrentSeason(): string {
 
 // ─── Structured Prompt Builder ────────────────────────────────────────────────
 
-/**
- * Parsed structure we expect from Mistral-7B.
- * The model is instructed to return only this JSON.
- */
 interface ParsedHFResponse {
   answer:      string;
   explanation: string;
@@ -243,10 +252,8 @@ function isValidParsed(p: ParsedHFResponse): boolean {
 }
 
 function tryParseJSON(raw: string): ParsedHFResponse | null {
-  // Strip markdown fences if model wraps in ```json
   const stripped = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
   try { return JSON.parse(stripped) as ParsedHFResponse; } catch { /* ignore */ }
-  // Try extracting first {...} block
   const match = stripped.match(/\{[\s\S]*\}/);
   if (match) {
     try { return JSON.parse(match[0]) as ParsedHFResponse; } catch { /* ignore */ }
@@ -260,7 +267,6 @@ function scoreConfidence(
 ): ConfidenceLevel {
   if (parsed.confidence === "high" && retrieved.length >= 2) return "high";
   if (parsed.confidence === "low"  || parsed.steps.length < 2) return "low";
-  // Check for Kenya-specific signals in the response
   const combined = `${parsed.answer} ${parsed.explanation} ${parsed.steps.join(" ")}`.toLowerCase();
   const kenyaSignals = ["kenya", "kalro", "nairobi", "fertilizer", "season", "acre", "maize", "extension"];
   const hits = kenyaSignals.filter((s) => combined.includes(s)).length;
@@ -268,52 +274,17 @@ function scoreConfidence(
   return "medium";
 }
 
-// ─── HuggingFace Text API ─────────────────────────────────────────────────────
+// ─── Backend Text API (with retry) ────────────────────────────────────────────
 
-async function callHFChat(prompt: string, maxTokens = 600): Promise<string> {
-  const apiKey = getApiKey();
-  if (!apiKey) throw new Error("VITE_HF_API_KEY not configured");
-
-  const res = await fetchWithTimeout(`${HF_BASE}/v1/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type":  "application/json",
-      Authorization:   `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model:       MODELS.text,
-      messages:    [{ role: "user", content: prompt }],
-      max_tokens:  maxTokens,
-      temperature: 0.35,
-      stream:      false,
-    }),
-  });
-
-  if (res.status === 503) {
-    const body = await res.json().catch(() => ({})) as { estimated_time?: number };
-    throw new Error(`Model loading (${body.estimated_time ? Math.ceil(body.estimated_time) + "s" : "~20s"})`);
-  }
-  if (!res.ok) throw new Error(`HF text API ${res.status}: ${(await res.text()).slice(0, 200)}`);
-
-  const data = await res.json() as { choices?: { message?: { content?: string } }[] };
-  const content = data?.choices?.[0]?.message?.content?.trim();
-  if (!content) throw new Error("Empty response from HF API");
-  return content;
-}
-
-/**
- * Call HF with validation + one retry on weak responses.
- */
-async function callHFWithRetry(
+async function callTextWithRetry(
   query: string,
   retrieved: CorpusEntry[],
   weatherSummary: string,
   farmingCtx: FarmingContext,
   mode: AssistantMode
 ): Promise<{ parsed: ParsedHFResponse; wasRetry: boolean }> {
-  // First attempt
   const prompt1 = buildRAGPrompt(query, retrieved, weatherSummary, farmingCtx, mode, false);
-  const raw1    = await callHFChat(prompt1);
+  const raw1    = await callBackendText(prompt1);
   const parsed1 = tryParseJSON(raw1);
 
   if (parsed1 && isValidParsed(parsed1)) {
@@ -322,43 +293,34 @@ async function callHFWithRetry(
 
   console.warn("[aiService] First attempt invalid, retrying with stronger prompt");
 
-  // Retry with more context + explicit reminder
   const prompt2 = buildRAGPrompt(query, retrieved, weatherSummary, farmingCtx, mode, true);
-  const raw2    = await callHFChat(prompt2, 700);
+  const raw2    = await callBackendText(prompt2, 700);
   const parsed2 = tryParseJSON(raw2);
 
   if (parsed2 && isValidParsed(parsed2)) {
     return { parsed: parsed2, wasRetry: true };
   }
 
-  // If retry also failed, try to salvage whatever we got
   const best = parsed2 ?? parsed1;
   if (best) {
-    // Patch missing fields to pass validation
     best.steps       = best.steps?.length ? best.steps : ["Consult your local agricultural extension officer.", "Contact KALRO for expert guidance."];
     best.explanation = best.explanation?.length ? best.explanation : best.answer;
     return { parsed: best, wasRetry: true };
   }
 
-  throw new Error("Both HF attempts returned unparseable responses");
+  throw new Error("Both attempts returned unparseable responses");
 }
 
 // ─── Smart Fallback ───────────────────────────────────────────────────────────
 
-/**
- * Build a structured fallback response from retrieved knowledge entries.
- * Never returns raw/generic text — always uses RAG-retrieved content.
- */
 function buildSmartFallback(
   query: string,
   retrieved: CorpusEntry[],
   mode: AssistantMode,
   resources: TrustedResource[]
 ): AIResponse {
-  // Use the best matching retrieved entry, or fall back to getGuidance
   const topEntry = retrieved[0];
   const guidance = topEntry?.guidance ?? getGuidance(query, mode);
-
   const allPoints = guidance.sections.flatMap((s) => s.points);
 
   return {
@@ -373,15 +335,11 @@ function buildSmartFallback(
 
 // ─── Primary Text Query ───────────────────────────────────────────────────────
 
-/**
- * Main public function: RAG-powered farming advice / diagnosis / planning.
- */
 export async function queryAI(
   query: string,
   context?: FarmingContext,
   mode: AssistantMode = "advice"
 ): Promise<AIResponse> {
-  const apiKey   = getApiKey();
   const location = context?.location ?? "Kenya";
   const cacheKey = buildCacheKey(query, location, mode);
 
@@ -389,7 +347,7 @@ export async function queryAI(
   const cached = getCached(cacheKey);
   if (cached) return cached;
 
-  // 2. Parallel: fetch weather + retrieve knowledge (both non-blocking)
+  // 2. Parallel: fetch weather + retrieve knowledge
   const corpus = getKnowledgeCorpus();
   let retrieved: CorpusEntry[] = [];
   let weatherCtx = "";
@@ -397,7 +355,7 @@ export async function queryAI(
   try {
     const [weather, topEntries] = await Promise.allSettled([
       getWeatherContext(),
-      apiKey ? retrieveTopK(query, corpus, apiKey, 3) : Promise.reject("no key"),
+      retrieveTopK(query, corpus, 3),
     ]);
 
     if (weather.status === "fulfilled" && weather.value) {
@@ -406,40 +364,37 @@ export async function queryAI(
     if (topEntries.status === "fulfilled") {
       retrieved = topEntries.value;
     } else {
-      // Keyword fallback retrieval when embedding is unavailable
       const q = query.toLowerCase();
       retrieved = corpus.filter((e) =>
         e.text.toLowerCase().split(/\W+/).some((w) => w.length > 3 && q.includes(w))
       ).slice(0, 3);
     }
-  } catch { /* non-fatal — proceed with empty retrieved */ }
+  } catch { /* non-fatal */ }
 
   const resources = matchResources(query, retrieved);
 
-  // 3. Try HuggingFace
-  if (apiKey) {
-    try {
-      const { parsed, wasRetry } = await callHFWithRetry(
-        query, retrieved, weatherCtx, context ?? {}, mode
-      );
+  // 3. Try backend AI
+  try {
+    const { parsed, wasRetry } = await callTextWithRetry(
+      query, retrieved, weatherCtx, context ?? {}, mode
+    );
 
-      const response: AIResponse = {
-        message:        `${parsed.answer}\n\n${parsed.explanation}`.trim(),
-        confidence:     scoreConfidence(parsed, retrieved),
-        nextSteps:      parsed.steps,
-        source:         "huggingface",
-        model:          MODELS.text,
-        resources,
-        weatherSummary: weatherCtx || undefined,
-      };
+    const response: AIResponse = {
+      message:        `${parsed.answer}\n\n${parsed.explanation}`.trim(),
+      confidence:     scoreConfidence(parsed, retrieved),
+      nextSteps:      parsed.steps,
+      source:         "huggingface",
+      model:          MODELS.text,
+      resources,
+      weatherSummary: weatherCtx || undefined,
+    };
 
-      if (wasRetry) response.confidence = response.confidence === "high" ? "medium" : response.confidence;
+    if (wasRetry) response.confidence = response.confidence === "high" ? "medium" : response.confidence;
 
-      setCached(cacheKey, response);
-      return response;
-    } catch (err) {
-      console.warn("[aiService] HF text failed:", (err as Error).message);
-    }
+    setCached(cacheKey, response);
+    return response;
+  } catch (err) {
+    console.warn("[aiService] Backend text failed:", (err as Error).message);
   }
 
   // 4. Smart fallback
@@ -473,53 +428,10 @@ function labelToAdvice(label: string): string {
   return "Condition unclear. Consult your local agricultural extension officer for on-site assessment.";
 }
 
-async function fileToBinary(file: File): Promise<ArrayBuffer> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload  = () => resolve(reader.result as ArrayBuffer);
-    reader.onerror = () => reject(new Error("Failed to read image"));
-    reader.readAsArrayBuffer(file);
-  });
-}
-
-async function callHFImage(
-  file: File,
-  modelId: string
-): Promise<{ label: string; score: number }[]> {
-  const apiKey = getApiKey();
-  if (!apiKey) throw new Error("VITE_HF_API_KEY not configured");
-
-  const binary = await fileToBinary(file);
-
-  const res = await fetchWithTimeout(`${HF_BASE}/models/${modelId}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": file.type || "image/jpeg",
-      Authorization:  `Bearer ${apiKey}`,
-    },
-    body: binary,
-  });
-
-  if (res.status === 503) throw new Error("Image model loading — retry in 20s");
-  if (!res.ok) throw new Error(`HF image API ${res.status}`);
-
-  const data = await res.json() as unknown;
-  if (!Array.isArray(data) || !(data as {label?:string}[])[0]?.label)
-    throw new Error("Unexpected image response format");
-  return (data as { label: string; score: number }[]).slice(0, 5);
-}
-
-/**
- * Use the text model to generate a user-friendly interpretation of image predictions.
- * Only called when the classification model returns valid results.
- */
 async function interpretPredictionsWithAI(
   predictions: ImagePrediction[],
   context?: FarmingContext
 ): Promise<string | null> {
-  const apiKey = getApiKey();
-  if (!apiKey) return null;
-
   const topPrediction = predictions[0];
   const subject = context?.cropType || context?.livestockType || "the crop in the image";
   const predsList = predictions.slice(0, 3)
@@ -531,17 +443,13 @@ async function interpretPredictionsWithAI(
 Write a brief, practical interpretation in 2-3 sentences using simple language. Mention the most likely condition and one immediate action the farmer should take. Do NOT start with "I" or greetings. [/INST]`;
 
   try {
-    const raw = await callHFChat(prompt, 200);
+    const raw = await callBackendText(prompt, 200);
     return raw.trim() || null;
   } catch {
     return null;
   }
 }
 
-/**
- * Analyze an uploaded farm image for disease, pest, or condition assessment.
- * Enforces a confidence threshold of 0.60 — returns "unclear image" below it.
- */
 export async function analyzeImage(
   imageFile: File,
   context?: FarmingContext
@@ -550,75 +458,67 @@ export async function analyzeImage(
     r.topics.includes("pest") || r.topics.includes("research")
   ).slice(0, 2);
 
-  // Try plant-disease model, then general vision model
-  for (const modelId of [MODELS.plantDisease, MODELS.image]) {
-    try {
-      const raw = await callHFImage(imageFile, modelId);
+  try {
+    const raw = await callBackendImage(imageFile);
 
-      const predictions: ImagePrediction[] = raw.map((p) => ({
-        label:  p.label,
-        score:  Math.round(p.score * 100) / 100,
-        advice: labelToAdvice(p.label),
-      }));
+    const predictions: ImagePrediction[] = raw.map((p) => ({
+      label:  p.label,
+      score:  Math.round(p.score * 100) / 100,
+      advice: labelToAdvice(p.label),
+    }));
 
-      const topScore = predictions[0]?.score ?? 0;
+    const topScore = predictions[0]?.score ?? 0;
 
-      // ─── Confidence threshold: reject unclear images ─────────────
-      if (topScore < IMAGE_CONFIDENCE_MIN) {
-        return {
-          message:    "The image is unclear or the model isn't confident enough to make a diagnosis. Please take a closer, well-lit photo of the affected area.",
-          confidence: "low",
-          nextSteps:  [
-            "Take a close-up photo of the affected leaf, stem, or animal part.",
-            "Ensure good lighting — natural daylight works best.",
-            "Avoid blurry or shadowy images.",
-            "Try photographing just one clearly affected area rather than the whole plant.",
-            "If the problem persists, contact your local extension officer for an on-site visit.",
-          ],
-          source:    "huggingface",
-          model:     modelId,
-          resources,
-          predictions,
-        };
-      }
-
-      // Get AI-generated interpretation of the predictions
-      const aiInterpretation = await interpretPredictionsWithAI(predictions, context);
-
-      const topLabel   = predictions[0].label;
-      const topAdvice  = predictions[0].advice ?? "";
-      const subject    = context?.cropType || context?.livestockType || "your crop";
-      const confLabel  = topScore >= 0.80 ? "high confidence" : "moderate confidence";
-
-      const message = aiInterpretation
-        ?? `Analysis of your ${subject} image (${confLabel}): The model identified "${topLabel}" as the most likely condition. ${topAdvice}`;
-
+    if (topScore < IMAGE_CONFIDENCE_MIN) {
       return {
-        message,
-        confidence: topScore >= 0.80 ? "high" : "medium",
+        message:    "The image is unclear or the model isn't confident enough to make a diagnosis. Please take a closer, well-lit photo of the affected area.",
+        confidence: "low",
         nextSteps:  [
-          topAdvice,
-          "Record when symptoms first appeared and which plants are affected.",
-          "Isolate affected plants immediately to prevent spread.",
-          "Take samples to your nearest agricultural extension office.",
-          "Contact KALRO or Kenya Plant Health Inspectorate (KEPHIS) for expert confirmation.",
-        ].filter((s) => s.length > 5).slice(0, 5),
+          "Take a close-up photo of the affected leaf, stem, or animal part.",
+          "Ensure good lighting — natural daylight works best.",
+          "Avoid blurry or shadowy images.",
+          "Try photographing just one clearly affected area rather than the whole plant.",
+          "If the problem persists, contact your local extension officer for an on-site visit.",
+        ],
         source:    "huggingface",
-        model:     modelId,
+        model:     MODELS.plantDisease,
         resources,
         predictions,
       };
-    } catch (err) {
-      console.warn(`[aiService] Image model ${modelId} failed:`, (err as Error).message);
     }
+
+    const aiInterpretation = await interpretPredictionsWithAI(predictions, context);
+
+    const topLabel   = predictions[0].label;
+    const topAdvice  = predictions[0].advice ?? "";
+    const subject    = context?.cropType || context?.livestockType || "your crop";
+    const confLabel  = topScore >= 0.80 ? "high confidence" : "moderate confidence";
+
+    const message = aiInterpretation
+      ?? `Analysis of your ${subject} image (${confLabel}): The model identified "${topLabel}" as the most likely condition. ${topAdvice}`;
+
+    return {
+      message,
+      confidence: topScore >= 0.80 ? "high" : "medium",
+      nextSteps:  [
+        topAdvice,
+        "Record when symptoms first appeared and which plants are affected.",
+        "Isolate affected plants immediately to prevent spread.",
+        "Take samples to your nearest agricultural extension office.",
+        "Contact KALRO or Kenya Plant Health Inspectorate (KEPHIS) for expert confirmation.",
+      ].filter((s) => s.length > 5).slice(0, 5),
+      source:    "huggingface",
+      model:     MODELS.plantDisease,
+      resources,
+      predictions,
+    };
+  } catch (err) {
+    console.warn("[aiService] Image analysis failed:", (err as Error).message);
   }
 
   // Fallback: text-based guidance
   const corpus    = getKnowledgeCorpus();
-  const apiKey    = getApiKey();
-  const retrieved = apiKey
-    ? await retrieveTopK("crop disease pest diagnosis", corpus, apiKey, 2).catch(() => corpus.slice(0, 2))
-    : corpus.slice(0, 2);
+  const retrieved = await retrieveTopK("crop disease pest diagnosis", corpus, 2).catch(() => corpus.slice(0, 2));
 
   const fallback = buildSmartFallback("crop disease or pest", retrieved, "diagnosis", resources);
   return {
@@ -631,10 +531,6 @@ export async function analyzeImage(
 
 // ─── Activity-Specific Advice ─────────────────────────────────────────────────
 
-/**
- * Get targeted advice for a specific farm activity.
- * Used when the user taps an activity chip in FarmAssistant.
- */
 export async function queryActivityAdvice(
   activityName: string,
   activityType: string,

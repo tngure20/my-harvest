@@ -277,13 +277,13 @@ const PostCard = ({ post, onDeleted }: PostCardProps) => {
       </div>
 
       {/* Shared post attribution */}
-      {post.sharedFromId && (
+      {post.originalPostId && (
         <div className="mx-4 mb-2 rounded-lg border bg-muted/40 p-3">
           <p className="text-[11px] font-medium text-muted-foreground mb-1">
-            Originally by {post.sharedFromAuthorName}
+            Originally by {post.originalPostAuthorName}
           </p>
           <p className="text-xs text-foreground leading-relaxed line-clamp-3">
-            {post.sharedFromText}
+            {post.originalPostContent}
           </p>
         </div>
       )}

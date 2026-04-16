@@ -3,11 +3,12 @@ import { motion } from "framer-motion";
 import EmptyState from "@/components/ui/EmptyState";
 import { useQuery } from "@tanstack/react-query";
 import { fetchPosts } from "@/lib/supabaseService";
+import type { Post } from "@/lib/dataService";
 
 const SocialFeed = () => {
-  const { data: posts = [] } = useQuery({
+  const { data: posts = [] } = useQuery<Post[]>({
     queryKey: ["/api/posts"],
-    queryFn: fetchPosts,
+    queryFn: () => fetchPosts(),
   });
 
   if (posts.length === 0) {

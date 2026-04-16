@@ -64,11 +64,11 @@ const Onboarding = () => {
         farmingActivities: data.selectedTypes.length > 0 ? data.selectedTypes : user.farmingActivities,
       };
       updateUser(updates);
+      const country = countries.find(c => c.id === locationData.countryCode);
       await updateProfile(user.id, {
-        location: locationString || user.location || undefined,
-        farming_types: data.selectedTypes.length > 0 ? data.selectedTypes : undefined,
+        country: country?.name.replace(/\s.+$/, '') || undefined,
+        region: locationData.region || undefined,
         farm_scale: data.selectedScale || undefined,
-        onboarding_completed: true,
       }).catch(() => {});
     }
 
