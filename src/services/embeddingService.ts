@@ -1,17 +1,15 @@
 /**
  * Embedding Service
  * ──────────────────────────────────────────────────────────────────
- * Generates vector embeddings via HuggingFace sentence-transformers.
- * Supports single-text and batch embedding with long-lived caching.
+ * Generates vector embeddings via the ai-gateway edge function.
+ * No API keys are used in the frontend.
  *
  * Model: sentence-transformers/all-MiniLM-L6-v2
  * Produces 384-dimensional float vectors.
  */
 
 import type { CorpusEntry } from "@/lib/agricultureKnowledge";
-
-const EMBED_MODEL = "sentence-transformers/all-MiniLM-L6-v2";
-const HF_BASE     = "https://api-inference.huggingface.co";
+import { supabase } from "@/services/supabaseClient";
 
 /** 24-hour TTL for corpus embeddings (rarely change) */
 const CORPUS_CACHE_TTL  = 24 * 60 * 60 * 1000;
@@ -74,68 +72,46 @@ function setCorpusCache(ids: string[], vectors: number[][]): void {
   } catch { /* storage quota — non-fatal */ }
 }
 
-// ─── HuggingFace API calls ────────────────────────────────────────────────────
+// ─── Backend API call ─────────────────────────────────────────────────────────
 
-async function callEmbedAPI(inputs: string | string[], apiKey: string): Promise<number[][]> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 20_000);
+async function callEmbedAPI(inputs: string | string[]): Promise<number[][]> {
+  const { data, error } = await supabase.functions.invoke("ai-gateway/embed", {
+    body: { inputs },
+  });
 
-  try {
-    const res = await fetch(`${HF_BASE}/models/${EMBED_MODEL}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({ inputs, options: { wait_for_model: true } }),
-      signal: controller.signal,
-    });
-
-    if (res.status === 503) {
-      const body = await res.json().catch(() => ({})) as { estimated_time?: number };
-      throw new Error(`Embed model loading (${body.estimated_time ? Math.ceil(body.estimated_time) + "s" : "~20s"})`);
-    }
-    if (!res.ok) throw new Error(`Embed API ${res.status}`);
-
-    const data = await res.json() as number[] | number[][];
-    // Normalise to 2D array regardless of whether input was single or batch
-    if (Array.isArray(data[0]) && Array.isArray((data[0] as number[])[0])) {
-      // Nested 3D: sentence-transformers sometimes returns [[[...]]]
-      return (data as number[][][]).map((d) => d[0]);
-    }
-    if (typeof data[0] === "number") {
-      // Single vector returned as flat 1D
-      return [data as number[]];
-    }
-    return data as number[][];
-  } finally {
-    clearTimeout(timer);
+  if (error) throw new Error(`Embed gateway error: ${error.message}`);
+  if (data?.error) {
+    if (data.error === "model_loading") throw new Error(`Embed model loading (~${data.estimated_time || 20}s)`);
+    throw new Error(`Embed backend: ${data.error}`);
   }
+
+  const embeddings = data?.embeddings;
+  if (!embeddings) throw new Error("No embeddings returned");
+
+  // Normalise to 2D array
+  if (Array.isArray(embeddings[0]) && Array.isArray((embeddings[0] as number[])[0])) {
+    return (embeddings as unknown as number[][][]).map((d: number[][]) => d[0]);
+  }
+  if (typeof embeddings[0] === "number") {
+    return [embeddings as number[]];
+  }
+  return embeddings as number[][];
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
-/**
- * Embed a single query string. Cached in memory for 1 hour.
- */
-export async function embedQuery(text: string, apiKey: string): Promise<number[]> {
+export async function embedQuery(text: string): Promise<number[]> {
   const cached = getCachedQuery(text);
   if (cached) return cached;
 
-  const vectors = await callEmbedAPI(text, apiKey);
+  const vectors = await callEmbedAPI(text);
   const vector = vectors[0];
   setCachedQuery(text, vector);
   return vector;
 }
 
-/**
- * Get or compute embeddings for the full knowledge corpus.
- * Uses a batch API call and caches in localStorage for 24 hours.
- * On cache miss: 1 API call for all N entries (efficient).
- */
 export async function getCorpusEmbeddings(
-  corpus: CorpusEntry[],
-  apiKey: string
+  corpus: CorpusEntry[]
 ): Promise<{ id: string; vector: number[] }[]> {
   const cached = getCorpusCache();
 
@@ -143,9 +119,8 @@ export async function getCorpusEmbeddings(
     return corpus.map((entry, i) => ({ id: entry.id, vector: cached.vectors[i] }));
   }
 
-  // Batch embed all corpus entries in one API call
   const texts = corpus.map((e) => e.text);
-  const vectors = await callEmbedAPI(texts, apiKey);
+  const vectors = await callEmbedAPI(texts);
 
   const ids = corpus.map((e) => e.id);
   setCorpusCache(ids, vectors);
@@ -155,16 +130,16 @@ export async function getCorpusEmbeddings(
 
 /**
  * Find the top-K most semantically similar corpus entries to the query.
+ * No API key needed — calls go through the backend edge function.
  */
 export async function retrieveTopK(
   query: string,
   corpus: CorpusEntry[],
-  apiKey: string,
   topK = 3
 ): Promise<CorpusEntry[]> {
   const [queryVector, corpusEmbeddings] = await Promise.all([
-    embedQuery(query, apiKey),
-    getCorpusEmbeddings(corpus, apiKey),
+    embedQuery(query),
+    getCorpusEmbeddings(corpus),
   ]);
 
   const scored = corpusEmbeddings.map(({ id, vector }) => ({
@@ -177,7 +152,6 @@ export async function retrieveTopK(
   return corpus.filter((e) => topIds.has(e.id));
 }
 
-/** Clear all embedding caches (useful after knowledge base updates) */
 export function clearEmbeddingCache(): void {
   _queryCache.clear();
   localStorage.removeItem(CORPUS_CACHE_KEY);
