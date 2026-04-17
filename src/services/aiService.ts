@@ -287,10 +287,11 @@ async function callTextWithRetry(
   query: string,
   retrieved: CorpusEntry[],
   weatherSummary: string,
+  newsSummary: string,
   farmingCtx: FarmingContext,
   mode: AssistantMode
 ): Promise<{ parsed: ParsedHFResponse; wasRetry: boolean }> {
-  const prompt1 = buildRAGPrompt(query, retrieved, weatherSummary, farmingCtx, mode, false);
+  const prompt1 = buildRAGPrompt(query, retrieved, weatherSummary, newsSummary, farmingCtx, mode, false);
   const raw1    = await callBackendText(prompt1);
   const parsed1 = tryParseJSON(raw1);
 
@@ -300,7 +301,7 @@ async function callTextWithRetry(
 
   console.warn("[aiService] First attempt invalid, retrying with stronger prompt");
 
-  const prompt2 = buildRAGPrompt(query, retrieved, weatherSummary, farmingCtx, mode, true);
+  const prompt2 = buildRAGPrompt(query, retrieved, weatherSummary, newsSummary, farmingCtx, mode, true);
   const raw2    = await callBackendText(prompt2, 700);
   const parsed2 = tryParseJSON(raw2);
 
@@ -354,10 +355,13 @@ export async function queryAI(
   const cached = getCached(cacheKey);
   if (cached) return cached;
 
-  // 2. Parallel: fetch weather + retrieve knowledge
+  // 2. Parallel: fetch weather + news + retrieve knowledge
   const corpus = getKnowledgeCorpus();
   let retrieved: CorpusEntry[] = [];
   let weatherCtx = "";
+  let newsCtx    = "";
+  let resolvedLocation = context?.location;
+  let resolvedCountry: string | undefined;
 
   try {
     const [weather, topEntries] = await Promise.allSettled([
@@ -366,7 +370,9 @@ export async function queryAI(
     ]);
 
     if (weather.status === "fulfilled" && weather.value) {
-      weatherCtx = weatherToPromptString(weather.value);
+      weatherCtx       = weatherToPromptString(weather.value);
+      resolvedLocation = resolvedLocation || weather.value.location;
+      resolvedCountry  = weather.value.country;
     }
     if (topEntries.status === "fulfilled") {
       retrieved = topEntries.value;
@@ -378,12 +384,23 @@ export async function queryAI(
     }
   } catch { /* non-fatal */ }
 
+  // News fetch is independent and best-effort — never blocks AI on failure.
+  try {
+    const articles = await fetchAgriNews({
+      location: resolvedLocation,
+      country:  resolvedCountry ?? "Kenya",
+      query,
+      limit:    5,
+    });
+    newsCtx = newsToPromptString(articles, 3);
+  } catch { /* non-fatal */ }
+
   const resources = matchResources(query, retrieved);
 
   // 3. Try backend AI
   try {
     const { parsed, wasRetry } = await callTextWithRetry(
-      query, retrieved, weatherCtx, context ?? {}, mode
+      query, retrieved, weatherCtx, newsCtx, context ?? {}, mode
     );
 
     const response: AIResponse = {
