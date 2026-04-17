@@ -101,8 +101,7 @@ serve(async (req) => {
   }
 
   const url = new URL(req.url);
-  const path = url.pathname.split("/").pop();
-
+const path = url.pathname.replace(/^.*\//, "");
   try {
     if (req.method !== "POST") {
       return new Response(JSON.stringify({ error: "method_not_allowed" }), {
