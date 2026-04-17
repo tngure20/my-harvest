@@ -186,6 +186,7 @@ function buildRAGPrompt(
   query: string,
   retrieved: CorpusEntry[],
   weatherSummary: string,
+  newsSummary: string,
   farmingCtx: FarmingContext,
   mode: AssistantMode,
   isRetry: boolean
@@ -212,11 +213,15 @@ function buildRAGPrompt(
 
   const trustedUrlsLine = TRUSTED_RESOURCES.map((r) => `${r.url} (${r.name})`).join(", ");
 
+  const newsBlock = newsSummary
+    ? `\nRECENT VERIFIED NEWS (reference only if relevant to the question):\n${newsSummary}\n`
+    : "";
+
   return `[INST] You are Harvest AI, a practical agricultural advisor for Kenyan and East African smallholder farmers.
 ${retryNote}
 FARMER CONTEXT: ${contextLine}
 WEATHER & SEASON: ${weatherSummary || getCurrentSeason()}
-
+${newsBlock}
 VERIFIED KNOWLEDGE BASE (use this to ground your answer):
 ${retrievedBlock}
 
@@ -226,6 +231,7 @@ RULES:
 - Use simple, plain English — no jargon
 - Be specific to Kenya/East Africa (mention KALRO, Kenya Seed Company, county offices where relevant)
 - Provide ONLY practical, actionable advice
+- Reference weather conditions if they affect timing (planting, irrigation, spraying, pest risk)
 - External links ONLY from: ${trustedUrlsLine}
 - Do NOT add greetings, sign-offs, or disclaimers
 
