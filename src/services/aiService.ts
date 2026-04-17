@@ -18,6 +18,7 @@ import { getGuidance, getKnowledgeCorpus } from "@/lib/agricultureKnowledge";
 import type { GuidanceResponse, AssistantMode, CorpusEntry } from "@/lib/agricultureKnowledge";
 import { retrieveTopK, clearEmbeddingCache } from "@/services/embeddingService";
 import { getWeatherContext, weatherToPromptString } from "@/services/weatherService";
+import { fetchAgriNews, newsToPromptString } from "@/services/newsService";
 import { supabase } from "@/services/supabaseClient";
 
 // ─── Model names (for display / logging only — actual calls go through backend) ─
@@ -185,6 +186,7 @@ function buildRAGPrompt(
   query: string,
   retrieved: CorpusEntry[],
   weatherSummary: string,
+  newsSummary: string,
   farmingCtx: FarmingContext,
   mode: AssistantMode,
   isRetry: boolean
@@ -211,11 +213,15 @@ function buildRAGPrompt(
 
   const trustedUrlsLine = TRUSTED_RESOURCES.map((r) => `${r.url} (${r.name})`).join(", ");
 
+  const newsBlock = newsSummary
+    ? `\nRECENT VERIFIED NEWS (reference only if relevant to the question):\n${newsSummary}\n`
+    : "";
+
   return `[INST] You are Harvest AI, a practical agricultural advisor for Kenyan and East African smallholder farmers.
 ${retryNote}
 FARMER CONTEXT: ${contextLine}
 WEATHER & SEASON: ${weatherSummary || getCurrentSeason()}
-
+${newsBlock}
 VERIFIED KNOWLEDGE BASE (use this to ground your answer):
 ${retrievedBlock}
 
@@ -225,6 +231,7 @@ RULES:
 - Use simple, plain English — no jargon
 - Be specific to Kenya/East Africa (mention KALRO, Kenya Seed Company, county offices where relevant)
 - Provide ONLY practical, actionable advice
+- Reference weather conditions if they affect timing (planting, irrigation, spraying, pest risk)
 - External links ONLY from: ${trustedUrlsLine}
 - Do NOT add greetings, sign-offs, or disclaimers
 
@@ -280,10 +287,11 @@ async function callTextWithRetry(
   query: string,
   retrieved: CorpusEntry[],
   weatherSummary: string,
+  newsSummary: string,
   farmingCtx: FarmingContext,
   mode: AssistantMode
 ): Promise<{ parsed: ParsedHFResponse; wasRetry: boolean }> {
-  const prompt1 = buildRAGPrompt(query, retrieved, weatherSummary, farmingCtx, mode, false);
+  const prompt1 = buildRAGPrompt(query, retrieved, weatherSummary, newsSummary, farmingCtx, mode, false);
   const raw1    = await callBackendText(prompt1);
   const parsed1 = tryParseJSON(raw1);
 
@@ -293,7 +301,7 @@ async function callTextWithRetry(
 
   console.warn("[aiService] First attempt invalid, retrying with stronger prompt");
 
-  const prompt2 = buildRAGPrompt(query, retrieved, weatherSummary, farmingCtx, mode, true);
+  const prompt2 = buildRAGPrompt(query, retrieved, weatherSummary, newsSummary, farmingCtx, mode, true);
   const raw2    = await callBackendText(prompt2, 700);
   const parsed2 = tryParseJSON(raw2);
 
@@ -347,10 +355,13 @@ export async function queryAI(
   const cached = getCached(cacheKey);
   if (cached) return cached;
 
-  // 2. Parallel: fetch weather + retrieve knowledge
+  // 2. Parallel: fetch weather + news + retrieve knowledge
   const corpus = getKnowledgeCorpus();
   let retrieved: CorpusEntry[] = [];
   let weatherCtx = "";
+  let newsCtx    = "";
+  let resolvedLocation = context?.location;
+  let resolvedCountry: string | undefined;
 
   try {
     const [weather, topEntries] = await Promise.allSettled([
@@ -359,7 +370,9 @@ export async function queryAI(
     ]);
 
     if (weather.status === "fulfilled" && weather.value) {
-      weatherCtx = weatherToPromptString(weather.value);
+      weatherCtx       = weatherToPromptString(weather.value);
+      resolvedLocation = resolvedLocation || weather.value.location;
+      resolvedCountry  = weather.value.country;
     }
     if (topEntries.status === "fulfilled") {
       retrieved = topEntries.value;
@@ -371,12 +384,23 @@ export async function queryAI(
     }
   } catch { /* non-fatal */ }
 
+  // News fetch is independent and best-effort — never blocks AI on failure.
+  try {
+    const articles = await fetchAgriNews({
+      location: resolvedLocation,
+      country:  resolvedCountry ?? "Kenya",
+      query,
+      limit:    5,
+    });
+    newsCtx = newsToPromptString(articles, 3);
+  } catch { /* non-fatal */ }
+
   const resources = matchResources(query, retrieved);
 
   // 3. Try backend AI
   try {
     const { parsed, wasRetry } = await callTextWithRetry(
-      query, retrieved, weatherCtx, context ?? {}, mode
+      query, retrieved, weatherCtx, newsCtx, context ?? {}, mode
     );
 
     const response: AIResponse = {
