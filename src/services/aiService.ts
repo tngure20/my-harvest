@@ -18,6 +18,7 @@ import { getGuidance, getKnowledgeCorpus } from "@/lib/agricultureKnowledge";
 import type { GuidanceResponse, AssistantMode, CorpusEntry } from "@/lib/agricultureKnowledge";
 import { retrieveTopK, clearEmbeddingCache } from "@/services/embeddingService";
 import { getWeatherContext, weatherToPromptString } from "@/services/weatherService";
+import { fetchAgriNews, newsToPromptString } from "@/services/newsService";
 import { supabase } from "@/services/supabaseClient";
 
 // ─── Model names (for display / logging only — actual calls go through backend) ─
