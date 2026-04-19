@@ -27,7 +27,36 @@ const Settings = () => {
     showFarmDetails: true,
   });
 
+  // Manual location override (any user can set this)
+  const { location: manualLoc, setLocation: setManualLoc } = useManualLocation();
+  const [locCountry, setLocCountry] = useState(manualLoc?.countryCode ?? "KE");
+  const [locRegion, setLocRegion] = useState(manualLoc?.region ?? "");
+
   useEffect(() => {
+    setLocCountry(manualLoc?.countryCode ?? "KE");
+    setLocRegion(manualLoc?.region ?? "");
+  }, [manualLoc]);
+
+  const selectedCountry = countries.find((c) => c.id === locCountry) ?? countries[0];
+
+  const saveLocation = () => {
+    if (!locRegion.trim()) {
+      toast.error("Please enter your " + selectedCountry.regionLabel.toLowerCase());
+      return;
+    }
+    setManualLoc({
+      country: selectedCountry.name.replace(/\s.+$/, ""), // strip emoji
+      countryCode: selectedCountry.id,
+      region: locRegion.trim(),
+    });
+    toast.success("Location saved — weather and news will refresh");
+  };
+
+  const clearLocation = () => {
+    setManualLoc(null);
+    setLocRegion("");
+    toast.success("Using device location again");
+  };
     if (darkMode) {
       document.documentElement.classList.add("dark");
     } else {
