@@ -32,19 +32,67 @@ const MODELS = {
 const RESPONSE_CACHE_TTL   = 5 * 60 * 1000;  // 5 minutes
 const IMAGE_CONFIDENCE_MIN = 0.60;
 
+// ─── Warm-up status emitter ───────────────────────────────────────────────────
+// The HF Inference API often returns 503 `model_loading` on cold starts. We
+// transparently retry with exponential backoff and broadcast a status event so
+// the UI can show "Model warming up — retrying in ~Ns" instead of an error.
+
+export type AIStatus =
+  | { kind: "warming"; retryInSec: number; attempt: number; maxAttempts: number }
+  | { kind: "ready" };
+
+type StatusListener = (s: AIStatus) => void;
+const statusListeners = new Set<StatusListener>();
+
+export function subscribeAIStatus(fn: StatusListener): () => void {
+  statusListeners.add(fn);
+  return () => { statusListeners.delete(fn); };
+}
+
+function emitStatus(s: AIStatus): void {
+  statusListeners.forEach((fn) => { try { fn(s); } catch { /* listener error — ignore */ } });
+}
+
+const MAX_WARMUP_RETRIES = 3;
+const MAX_WARMUP_WAIT_SEC = 30;
+
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
 // ─── Backend API Helpers ──────────────────────────────────────────────────────
 
 async function callBackendText(prompt: string, maxTokens = 600, temperature = 0.35): Promise<string> {
-  const { data, error } = await supabase.functions.invoke("ai-gateway/text", {
-    body: { prompt, maxTokens, temperature },
-  });
-  if (error) throw new Error(`AI gateway error: ${error.message}`);
-  if (data?.error) {
-    if (data.error === "model_loading") throw new Error(`Model loading (~${data.estimated_time || 20}s)`);
-    throw new Error(`AI backend: ${data.error}`);
+  for (let attempt = 1; attempt <= MAX_WARMUP_RETRIES + 1; attempt++) {
+    const { data, error } = await supabase.functions.invoke("ai-gateway/text", {
+      body: { prompt, maxTokens, temperature },
+    });
+    if (error) throw new Error(`AI gateway error: ${error.message}`);
+
+    if (data?.error === "model_loading") {
+      if (attempt > MAX_WARMUP_RETRIES) {
+        emitStatus({ kind: "ready" });
+        throw new Error(`Model still loading after ${MAX_WARMUP_RETRIES} retries`);
+      }
+      const hinted = Number(data.estimated_time) || 20;
+      // Exponential backoff capped at MAX_WARMUP_WAIT_SEC
+      const waitSec = Math.min(MAX_WARMUP_WAIT_SEC, Math.max(5, Math.ceil(hinted * Math.pow(1.5, attempt - 1))));
+      emitStatus({ kind: "warming", retryInSec: waitSec, attempt, maxAttempts: MAX_WARMUP_RETRIES });
+      await sleep(waitSec * 1000);
+      continue;
+    }
+
+    if (data?.error) {
+      emitStatus({ kind: "ready" });
+      throw new Error(`AI backend: ${data.error}`);
+    }
+    if (!data?.content) {
+      emitStatus({ kind: "ready" });
+      throw new Error("Empty response from AI backend");
+    }
+    emitStatus({ kind: "ready" });
+    return data.content;
   }
-  if (!data?.content) throw new Error("Empty response from AI backend");
-  return data.content;
+  emitStatus({ kind: "ready" });
+  throw new Error("AI backend exhausted retries");
 }
 
 async function callBackendImage(
@@ -54,13 +102,37 @@ async function callBackendImage(
   const bytes = new Uint8Array(buffer);
   const imageBase64 = btoa(String.fromCharCode(...bytes));
 
-  const { data, error } = await supabase.functions.invoke("ai-gateway/image", {
-    body: { imageBase64, contentType: file.type || "image/jpeg" },
-  });
-  if (error) throw new Error(`AI gateway image error: ${error.message}`);
-  if (data?.error) throw new Error(`AI image backend: ${data.error}`);
-  if (!data?.predictions) throw new Error("No predictions from backend");
-  return data.predictions;
+  for (let attempt = 1; attempt <= MAX_WARMUP_RETRIES + 1; attempt++) {
+    const { data, error } = await supabase.functions.invoke("ai-gateway/image", {
+      body: { imageBase64, contentType: file.type || "image/jpeg" },
+    });
+    if (error) throw new Error(`AI gateway image error: ${error.message}`);
+
+    if (data?.error === "model_loading") {
+      if (attempt > MAX_WARMUP_RETRIES) {
+        emitStatus({ kind: "ready" });
+        throw new Error(`Image model still loading after ${MAX_WARMUP_RETRIES} retries`);
+      }
+      const hinted = Number(data.estimated_time) || 20;
+      const waitSec = Math.min(MAX_WARMUP_WAIT_SEC, Math.max(5, Math.ceil(hinted * Math.pow(1.5, attempt - 1))));
+      emitStatus({ kind: "warming", retryInSec: waitSec, attempt, maxAttempts: MAX_WARMUP_RETRIES });
+      await sleep(waitSec * 1000);
+      continue;
+    }
+
+    if (data?.error) {
+      emitStatus({ kind: "ready" });
+      throw new Error(`AI image backend: ${data.error}`);
+    }
+    if (!data?.predictions) {
+      emitStatus({ kind: "ready" });
+      throw new Error("No predictions from backend");
+    }
+    emitStatus({ kind: "ready" });
+    return data.predictions;
+  }
+  emitStatus({ kind: "ready" });
+  throw new Error("AI image backend exhausted retries");
 }
 
 // ─── Trusted External Resources ───────────────────────────────────────────────

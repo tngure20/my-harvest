@@ -12,7 +12,7 @@ import { fetchFarmActivities } from "@/lib/supabaseService";
 import { useQuery } from "@tanstack/react-query";
 import type { GuidanceResponse, KnowledgeSource, AssistantMode } from "@/lib/agricultureKnowledge";
 import type { AIResponse, FarmingContext, TrustedResource } from "@/services/aiService";
-import { queryAI, analyzeImage, queryActivityAdvice } from "@/services/aiService";
+import { queryAI, analyzeImage, queryActivityAdvice, subscribeAIStatus, type AIStatus } from "@/services/aiService";
 import ReactMarkdown from "react-markdown";
 
 // ─── Chat message types ────────────────────────────────────────────────────────
@@ -263,8 +263,17 @@ const FarmAssistant = () => {
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [pendingImage, setPendingImage] = useState<{ file: File; preview: string } | null>(null);
+  const [warmup, setWarmup] = useState<AIStatus | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Subscribe to model warm-up status (HF cold-start retries)
+  useEffect(() => {
+    const unsub = subscribeAIStatus((s) => {
+      setWarmup(s.kind === "warming" ? s : null);
+    });
+    return unsub;
+  }, []);
 
   const { data: farmActivities = [] } = useQuery({
     queryKey: ["/api/farm-activities", user?.id],
@@ -498,10 +507,18 @@ const FarmAssistant = () => {
                     {msg.role === "user" ? (
                       <p className="text-sm">{msg.content}</p>
                     ) : msg.pending ? (
-                      <div className="flex gap-1 py-1">
-                        <span className="h-2 w-2 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: "0ms" }} />
-                        <span className="h-2 w-2 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: "150ms" }} />
-                        <span className="h-2 w-2 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: "300ms" }} />
+                      <div className="flex flex-col gap-2 py-1">
+                        <div className="flex gap-1">
+                          <span className="h-2 w-2 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: "0ms" }} />
+                          <span className="h-2 w-2 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: "150ms" }} />
+                          <span className="h-2 w-2 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: "300ms" }} />
+                        </div>
+                        {warmup && warmup.kind === "warming" && (
+                          <p className="text-[11px] text-muted-foreground italic">
+                            Model warming up — retrying in ~{warmup.retryInSec}s
+                            {warmup.maxAttempts > 1 && ` (attempt ${warmup.attempt}/${warmup.maxAttempts})`}
+                          </p>
+                        )}
                       </div>
                     ) : msg.aiResponse ? (
                       <AIResponseCard aiResponse={msg.aiResponse} />
