@@ -57,6 +57,8 @@ const Settings = () => {
     setLocRegion("");
     toast.success("Using device location again");
   };
+
+  useEffect(() => {
     if (darkMode) {
       document.documentElement.classList.add("dark");
     } else {
