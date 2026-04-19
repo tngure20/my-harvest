@@ -507,10 +507,18 @@ const FarmAssistant = () => {
                     {msg.role === "user" ? (
                       <p className="text-sm">{msg.content}</p>
                     ) : msg.pending ? (
-                      <div className="flex gap-1 py-1">
-                        <span className="h-2 w-2 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: "0ms" }} />
-                        <span className="h-2 w-2 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: "150ms" }} />
-                        <span className="h-2 w-2 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: "300ms" }} />
+                      <div className="flex flex-col gap-2 py-1">
+                        <div className="flex gap-1">
+                          <span className="h-2 w-2 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: "0ms" }} />
+                          <span className="h-2 w-2 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: "150ms" }} />
+                          <span className="h-2 w-2 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: "300ms" }} />
+                        </div>
+                        {warmup && warmup.kind === "warming" && (
+                          <p className="text-[11px] text-muted-foreground italic">
+                            Model warming up — retrying in ~{warmup.retryInSec}s
+                            {warmup.maxAttempts > 1 && ` (attempt ${warmup.attempt}/${warmup.maxAttempts})`}
+                          </p>
+                        )}
                       </div>
                     ) : msg.aiResponse ? (
                       <AIResponseCard aiResponse={msg.aiResponse} />
