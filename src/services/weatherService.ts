@@ -148,21 +148,35 @@ export async function getWeatherContext(): Promise<WeatherContext | null> {
   if (cached) return cached;
 
   try {
-    // Detect location
-    const coords = await getBrowserCoordinates();
     let city    = "Nairobi";
     let country = "Kenya";
     let county: string | undefined;
+    let coords: { lat: number; lon: number } | null = null;
 
-    if (coords) {
-      const geo = await reverseGeocode(coords.lat, coords.lon);
-      city    = geo.city;
-      country = geo.country;
-      county  = geo.county;
+    // 1. Manual override (set by user in Settings) takes precedence
+    let manual: { country: string; region: string } | null = null;
+    try {
+      const raw = localStorage.getItem("harvest_manual_location_v1");
+      if (raw) manual = JSON.parse(raw);
+    } catch { /* ignore */ }
+
+    if (manual?.region) {
+      city = manual.region;
+      country = manual.country || country;
+    } else {
+      // 2. Browser geolocation + reverse geocode
+      coords = await getBrowserCoordinates();
+      if (coords) {
+        const geo = await reverseGeocode(coords.lat, coords.lon);
+        city    = geo.city;
+        country = geo.country;
+        county  = geo.county;
+      }
     }
 
-    // Fetch weather (non-blocking failure)
-    const weather = await fetchWttr(city);
+    // Fetch weather (non-blocking failure) — query "city,country" for accuracy
+    const weatherQuery = manual?.region ? `${city},${country}` : city;
+    const weather = await fetchWttr(weatherQuery);
     const month   = new Date().getMonth() + 1;
 
     const ctx: WeatherContext = {
