@@ -39,7 +39,8 @@ async function hfFetch(url: string, body: unknown, contentType = "application/js
 }
 
 async function handleText(prompt: string, maxTokens = 600, temperature = 0.35) {
-  const res = await hfFetch(`${HF_BASE}https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.3`, {
+  // HF Inference Router exposes an OpenAI-compatible chat-completions endpoint.
+  const res = await hfFetch("https://router.huggingface.co/v1/chat/completions", {
     model: MODELS.text,
     messages: [{ role: "user", content: prompt }],
     max_tokens: maxTokens,
@@ -53,7 +54,7 @@ async function handleText(prompt: string, maxTokens = 600, temperature = 0.35) {
   }
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    return { error: `hf_error_${res.status}`, detail: text.slice(0, 200) };
+    return { error: `hf_error_${res.status}`, detail: text.slice(0, 300) };
   }
 
   const data = await res.json();
