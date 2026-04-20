@@ -13,6 +13,8 @@ import { useQuery } from "@tanstack/react-query";
 import type { GuidanceResponse, KnowledgeSource, AssistantMode } from "@/lib/agricultureKnowledge";
 import type { AIResponse, FarmingContext, TrustedResource } from "@/services/aiService";
 import { queryAI, analyzeImage, queryActivityAdvice, subscribeAIStatus, type AIStatus } from "@/services/aiService";
+import { getWeatherContext } from "@/services/weatherService";
+import type { FarmActivity } from "@/lib/dataService";
 import ReactMarkdown from "react-markdown";
 
 // ─── Chat message types ────────────────────────────────────────────────────────
@@ -285,11 +287,71 @@ const FarmAssistant = () => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, isTyping]);
 
-  const buildContext = useCallback((): FarmingContext => ({
-    location: user?.location || "Kenya",
-    farmActivities: farmActivities.map((a) => `${a.name} (${a.type})`),
-    mode,
-  }), [user, farmActivities, mode]);
+  /**
+   * Pick the activity most relevant to a query (matches species, name, type).
+   * Falls back to the first activity if nothing matches.
+   */
+  const matchActivity = (q: string, activities: FarmActivity[]): FarmActivity | undefined => {
+    if (!activities.length) return undefined;
+    const ql = q.toLowerCase();
+    const scored = activities
+      .map((a) => {
+        let score = 0;
+        const haystack = `${a.name} ${a.species} ${a.type}`.toLowerCase();
+        for (const word of haystack.split(/\s+/)) {
+          if (word.length > 3 && ql.includes(word)) score += 2;
+        }
+        if (ql.includes(a.type)) score += 1;
+        return { a, score };
+      })
+      .sort((x, y) => y.score - x.score);
+    return scored[0]?.score > 0 ? scored[0].a : activities[0];
+  };
+
+  /**
+   * Build a compact, plain-English summary of the farmer's actual operations
+   * for the AI prompt. Includes upcoming tasks and most recent records.
+   */
+  const summarizeActivities = (activities: FarmActivity[]): string => {
+    if (!activities.length) return "";
+    const today = new Date();
+    return activities.slice(0, 4).map((a) => {
+      const upcoming = (a.tasks || [])
+        .filter((t) => !t.completed)
+        .sort((x, y) => x.dueDate.localeCompare(y.dueDate))[0];
+      const lastRecord = (a.records || [])
+        .slice()
+        .sort((x, y) => y.date.localeCompare(x.date))[0];
+      const overdue = upcoming && new Date(upcoming.dueDate) < today;
+
+      const parts = [`- ${a.name} (${a.type}, ${a.species}, ${a.size}) started ${a.startDate}`];
+      if (upcoming) {
+        parts.push(`  next task: "${upcoming.title}" due ${upcoming.dueDate}${overdue ? " (OVERDUE)" : ""}`);
+      }
+      if (lastRecord) {
+        parts.push(`  last record (${lastRecord.date}): ${lastRecord.type} — ${lastRecord.description}`);
+      }
+      return parts.join("\n");
+    }).join("\n");
+  };
+
+  const buildContext = useCallback(async (query: string): Promise<FarmingContext> => {
+    const matched = matchActivity(query, farmActivities);
+    const weather = await getWeatherContext().catch(() => null);
+
+    const ctx: FarmingContext = {
+      location: weather?.location || user?.location || "Kenya",
+      farmActivities: farmActivities.map((a) => `${a.name} (${a.type}, ${a.species})`),
+      farmContextSummary: summarizeActivities(farmActivities) || undefined,
+      mode,
+    };
+
+    if (matched) {
+      if (matched.type === "crop") ctx.cropType = matched.species || matched.name;
+      else if (matched.type === "livestock" || matched.type === "poultry") ctx.livestockType = matched.species || matched.name;
+    }
+    return ctx;
+  }, [user, farmActivities, mode]);
 
   const appendMessage = (msg: ChatMessage) =>
     setMessages((prev) => [...prev, msg]);
@@ -324,7 +386,7 @@ const FarmAssistant = () => {
 
     try {
       let aiResponse: AIResponse;
-      const context = buildContext();
+      const context = await buildContext(query);
 
       if (hasImage && capturedImage) {
         aiResponse = await analyzeImage(capturedImage.file, { ...context, mode: "diagnosis" });
@@ -363,7 +425,8 @@ const FarmAssistant = () => {
     appendMessage({ id: assistantId, role: "assistant", content: "", pending: true, timestamp: new Date() });
 
     try {
-      const aiResponse = await queryActivityAdvice(activityName, activityType, buildContext());
+      const ctx = await buildContext(`${activityType} ${activityName}`);
+      const aiResponse = await queryActivityAdvice(activityName, activityType, ctx);
       replaceMessage(assistantId, { content: aiResponse.message, aiResponse, pending: false });
     } catch {
       replaceMessage(assistantId, { content: "Failed to get advice. Please try again.", pending: false });
