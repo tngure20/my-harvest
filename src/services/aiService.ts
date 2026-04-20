@@ -194,6 +194,10 @@ export interface FarmingContext {
   season?: string;
   mode?: AssistantMode;
   farmActivities?: string[];
+  /** Optional rich, multi-line summary of the farmer's actual activities,
+   *  upcoming tasks and recent records. Injected verbatim into the prompt
+   *  so AI advice can reference the farmer's real situation. */
+  farmContextSummary?: string;
 }
 
 // ─── Response Cache ───────────────────────────────────────────────────────────
@@ -274,6 +278,10 @@ function buildRAGPrompt(
     farmingCtx.location       && `based in ${farmingCtx.location}`,
     farmingCtx.farmActivities?.length && `farm activities: ${farmingCtx.farmActivities.slice(0, 3).join(", ")}`,
   ].filter(Boolean).join("; ") || "smallholder farmer in Kenya";
+
+  const farmDetailsBlock = farmingCtx.farmContextSummary
+    ? `\nFARMER'S CURRENT OPERATIONS (use this to make advice specific):\n${farmingCtx.farmContextSummary}\n`
+    : "";
 
   const retrievedBlock = retrieved.length
     ? retrieved.map((e) => `### ${e.guidance.title}\n${e.guidance.summary}\nKey points: ${e.guidance.sections[0]?.points.slice(0, 3).join(" | ")}`).join("\n\n")
