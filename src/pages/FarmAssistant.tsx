@@ -386,7 +386,7 @@ const FarmAssistant = () => {
 
     try {
       let aiResponse: AIResponse;
-      const context = buildContext();
+      const context = await buildContext(query);
 
       if (hasImage && capturedImage) {
         aiResponse = await analyzeImage(capturedImage.file, { ...context, mode: "diagnosis" });
@@ -425,7 +425,8 @@ const FarmAssistant = () => {
     appendMessage({ id: assistantId, role: "assistant", content: "", pending: true, timestamp: new Date() });
 
     try {
-      const aiResponse = await queryActivityAdvice(activityName, activityType, buildContext());
+      const ctx = await buildContext(`${activityType} ${activityName}`);
+      const aiResponse = await queryActivityAdvice(activityName, activityType, ctx);
       replaceMessage(assistantId, { content: aiResponse.message, aiResponse, pending: false });
     } catch {
       replaceMessage(assistantId, { content: "Failed to get advice. Please try again.", pending: false });
