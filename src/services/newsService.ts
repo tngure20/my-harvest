@@ -81,7 +81,6 @@ export async function fetchAgriNews(query: NewsQuery = {}): Promise<NewsArticle[
       headers: {
         "Content-Type": "application/json",
         apikey: supabaseKey,
-        Authorization: `Bearer ${supabaseKey}`,
       },
       body: JSON.stringify({
         location: query.location,
