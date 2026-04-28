@@ -1,6 +1,7 @@
 import AppLayout from "@/components/AppLayout";
 import WeatherWidget from "@/components/home/WeatherWidget";
 import FarmingAdvice from "@/components/home/FarmingAdvice";
+import FarmIntelligence from "@/components/home/FarmIntelligence";
 import RegionalAlerts from "@/components/home/RegionalAlerts";
 import AgriNews from "@/components/home/AgriNews";
 import SocialFeed from "@/components/home/SocialFeed";
@@ -62,6 +63,7 @@ const Index = () => {
         )}
 
         <QuickActions />
+        {isAuthenticated && <FarmIntelligence />}
         <RegionalAlerts />
         <WeatherWidget />
         {isAuthenticated && <FarmingAdvice />}

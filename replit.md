@@ -290,6 +290,94 @@ All post/comment/listing queries use **two-step batch fetching** — never Supab
 - Optimistic updates on post creation with rollback on failure
 - `communityId` filter chip strip on feed for community-scoped browsing
 
+## Farm Intelligence Engine (April 2026)
+Unified server-side decision layer that fuses **profile + farm activities + weather + agri-news** into a single Mistral-7B reasoning call. Frontend makes ONE network request — no client-side orchestration of weather/news/AI for this view.
+
+### Architecture
+```
+                 ┌──────────────────────────────────┐
+   <Home>        │   ai-gateway/farm-intel          │
+   FarmIntel ──▶ │   (Supabase Edge Function)       │
+                 ├──────────────────────────────────┤
+                 │  1. Verify caller's JWT          │
+                 │  2. Read profiles, farm_         │
+                 │     activities, tasks,           │
+                 │     farm_records (service-role)  │
+                 │  3. Read weather_cache (30 m TTL)│
+                 │     fallback → Open-Meteo geo+   │
+                 │     forecast, persist back       │
+                 │  4. Read RSS news (6 h cache,    │
+                 │     in-memory) — region-filtered │
+                 │  5. Build structured context     │
+                 │  6. Single Mistral-7B call →     │
+                 │     parse strict JSON            │
+                 │  7. Persist alerts in farm_      │
+                 │     intelligence_alerts          │
+                 │  8. On AI failure → heuristic    │
+                 │     fallback (never silent)      │
+                 └──────────────────────────────────┘
+```
+
+### Files
+- **Edge Function**: `supabase/functions/ai-gateway/index.ts` — new `farm-intel` route added; existing `/text`, `/image`, `/embed`, `/news` routes unchanged
+- **Migration**: `supabase/migrations/20260428_farm_intelligence.sql` — creates `weather_cache` + `farm_intelligence_alerts` (additive, `IF NOT EXISTS`, RLS scoped per user)
+- **Service**: `src/services/farmIntelService.ts` — single `fetchFarmIntelligence()` call, 5-min client cache
+- **UI**: `src/components/home/FarmIntelligence.tsx` — risk-coloured card with headline, alerts, recommendations, farm-action targets, expandable reasoning
+- **Wired in**: `src/pages/Index.tsx` (top of authenticated home, above WeatherWidget)
+
+### Output JSON contract
+```jsonc
+{
+  "risk_level": "low" | "medium" | "high",
+  "headline": "single sentence",
+  "alerts": [{ "type": "weather|pest|disease|market|general",
+               "severity": "low|medium|high",
+               "title": "...", "message": "...",
+               "source": "weather|news|ai|farm" }],
+  "recommendations": ["…", "…"],
+  "farm_actions":    [{ "activity": "…", "action": "…", "due_within_days": 3 }],
+  "reasoning": "2-4 sentences explaining how the signals combined"
+}
+```
+
+### Caching strategy (priority: cached + structured > raw API)
+| Layer | TTL | Where |
+|---|---|---|
+| Frontend in-memory | 5 min | `farmIntelService.ts` |
+| Backend reuse of last alert row | 1 h | `farm_intelligence_alerts` (skip Mistral if recent) |
+| `weather_cache` | 30 min | per (region\|country) location key |
+| News RSS | 6 h | in-memory, per Edge Function instance |
+
+### Failure handling (degrades gracefully, never silent)
+- No JWT → returns `error: "missing_authorization"` with 502
+- AI fails / returns invalid JSON → heuristic fallback from weather signals + overdue tasks; surfaced to UI as `aiSource: "fallback"`
+- Weather API down → context built without it, `reasoning` mentions the gap
+- News fetch fails → context built without it
+- `weather_cache` table missing → upsert/select wrapped in try/catch — function still works
+
+### Deployment (one-time, manual — keeps backend ops separate from app code)
+```bash
+# 1. Apply additive migration (non-destructive, IF NOT EXISTS guards)
+supabase db push
+#   or paste supabase/migrations/20260428_farm_intelligence.sql
+#   into Supabase Dashboard → SQL Editor
+
+# 2. Redeploy the Edge Function
+supabase functions deploy ai-gateway --no-verify-jwt
+#   (--no-verify-jwt matches existing config.toml so anon-key calls still
+#    reach the function; the farm-intel handler validates the JWT manually
+#    via supabase.auth.getUser())
+```
+
+The Edge Function automatically receives `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` from Supabase's default secret set — no extra env vars to configure. `HF_API_KEY` must already be set (it powers the existing `/text` route).
+
+### Constraints honoured
+- ✅ No changes to auth, existing tables, RLS policies, or API keys
+- ✅ Only ADDITIVE tables (`weather_cache`, `farm_intelligence_alerts`)
+- ✅ Existing Edge Function routes (`/text`, `/image`, `/embed`, `/news`) unchanged
+- ✅ Frontend single-endpoint contract — no client-side fusion logic
+- ✅ Weather + news now feed AI reasoning, not just UI cards
+
 ## Hardening Pass (April 2026)
 - **Image upload safety** (`aiService.callBackendImage`):
   - Replaced `btoa(String.fromCharCode(...bytes))` with chunked 32 KB encoder (`fileToBase64`) — avoids stack-overflow crash on images > ~100 KB

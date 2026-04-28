@@ -1,0 +1,58 @@
+You are working on an existing production agricultural platform built with Supabase (Auth, Database, Edge Functions), an ai-gateway Edge Function, and a fully functional frontend already connected to weather APIs, news APIs, and AI services. The backend infrastructure must NOT be broken, modified destructively, or have existing API keys, authentication logic, or schemas removed. Your task is to EXTEND the backend and integrate a unified “Farm Intelligence Engine” that combines weather, agricultural news, farm data, and AI reasoning into one coherent system.
+
+The current system is fragmented: weather, news, farm data, and AI operate independently. Your goal is to unify them into a single intelligence layer that produces actionable farming insights.
+
+Create a new logical module inside the existing Supabase Edge Function ai-gateway called “farm-intel” (or extend the existing /text handler with a mode parameter if cleaner). This module must act as the central reasoning engine for farming decisions.
+
+This Farm Intelligence Engine must:
+
+Collect contextual data server-side inside the Edge Function without relying on the frontend. This includes:
+User profile location from Supabase profiles table
+Farm data from farm_records, farm_entities, and farm_activities
+Latest cached weather data from weather_cache table (or fallback weather API if missing)
+Latest agricultural news from a structured source (News API / GDELT / RSS ingestion if applicable)
+Any relevant alerts already stored in Supabase
+Normalize all inputs into a single structured context block that represents the farmer’s real-world situation. This context must include:
+Location (county/country or GPS if available)
+Current weather conditions (temperature, rainfall risk, humidity, forecast summary)
+Active crops/livestock and growth stage
+Recent farm activities (planting, fertilization, irrigation, etc.)
+Relevant agricultural news (filtered by region and topic such as pests, drought, fertilizer, market changes)
+Send this unified context to the existing Mistral-7B model through the ai-gateway reasoning pipeline. The prompt must instruct the model to act as a farm intelligence system, not a chatbot.
+
+The AI output must be structured JSON and include:
+
+risk_level (low, medium, high)
+alerts (weather, pest, disease, market impacts)
+recommendations (actionable farming steps)
+farm_actions (specific updates or tasks for farm management)
+reasoning (short explanation in simple language)
+
+The output must be strictly structured and machine-readable.
+
+Store the generated insights in a new or existing Supabase table called farm_intelligence_alerts. Each record must include:
+user_id
+location
+alert type (weather, pest, disease, market, general)
+severity
+message
+source (weather/news/ai)
+timestamp
+Ensure weather and news are no longer treated as UI-only features. They must be ingested into the intelligence engine and contribute directly to AI decision-making.
+Implement caching behavior:
+Weather data should be stored in weather_cache and reused when recent
+News should be refreshed periodically (not on every request)
+AI should always prioritize cached + structured data over raw API calls
+Ensure frontend simplification:
+The frontend should only call a single ai-gateway endpoint using mode: "farm-intel". It should NOT separately handle weather reasoning, news interpretation, or farm recommendations. All intelligence must come from the backend engine.
+Ensure failure handling:
+If any data source (weather/news/farm data) is missing, the system must degrade gracefully and still produce useful output using available data. Never fail silently.
+Ensure no changes are made to:
+Supabase auth system
+Existing database schema (only additive tables allowed)
+API keys or secrets
+Existing ai-gateway routes for chat, image, or embeddings
+Final requirement:
+The system must behave as a unified agricultural decision engine where weather, news, and farm data are fused into actionable insights that help farmers make real decisions such as irrigation timing, pest prevention, fertilizer application, and risk alerts.
+
+Do not create separate disconnected systems. Everything must feed into the Farm Intelligence Engine and output a single coherent decision layer per user.
