@@ -4,6 +4,7 @@ import FarmingAdvice from "@/components/home/FarmingAdvice";
 import RegionalAlerts from "@/components/home/RegionalAlerts";
 import AgriNews from "@/components/home/AgriNews";
 import SocialFeed from "@/components/home/SocialFeed";
+import QuickActions from "@/components/home/QuickActions";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { Leaf, ArrowRight } from "lucide-react";
@@ -60,10 +61,13 @@ const Index = () => {
           </motion.div>
         )}
 
+        <QuickActions />
         <RegionalAlerts />
         <WeatherWidget />
         {isAuthenticated && <FarmingAdvice />}
-        <AgriNews />
+        <div id="agri-news" className="scroll-mt-20">
+          <AgriNews />
+        </div>
         <SocialFeed />
       </div>
     </AppLayout>

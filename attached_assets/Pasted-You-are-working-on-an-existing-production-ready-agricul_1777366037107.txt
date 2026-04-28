@@ -1,0 +1,33 @@
+You are working on an existing production-ready agricultural platform that already has a fully functional backend using Supabase (database, auth, storage), Edge Functions (ai-gateway, image diagnosis, embeddings), weather APIs, and news APIs. Do NOT modify backend logic, API keys, Supabase schema unless something is missing and absolutely required. Do NOT break existing integrations. Your job is to COMPLETE the frontend and ensure all features are visible, usable, and fully connected.
+
+Right now, the application is incomplete because critical UI elements, navigation, and feature access points are missing or not rendered. This must be corrected by explicitly creating real UI components, not placeholders, and wiring them to the existing backend.
+
+Start by fixing the Home screen. It must contain clearly visible, primary quick-action components (cards or large buttons, not hidden in menus). These must include AI Chat Assistant, Image Diagnosis, My Farm, Farm Planner, Weather Details, and Agricultural News. Each of these must render on screen, be clickable, and navigate to a fully functional page or trigger the correct feature. No dead buttons, no console-only logic.
+
+Create a complete AI Assistant interface. This must include a chat UI with message history, input field, send button, loading states, and error handling. It must call the ai-gateway text endpoint through Supabase functions and display structured responses properly. It must also include an image upload and camera option that sends images to the ai-gateway image endpoint and displays diagnosis results with confidence, recommendations, and next steps.
+
+Build the Image Diagnosis experience as a proper screen, not just a function call. Users must be able to take a photo or upload one, preview it, submit it, and see results clearly. Results must include label, confidence, and actionable advice. This must connect to existing AI logic with no hardcoded responses.
+
+Implement a complete Farm Management system under “My Farm”. This must allow users to view, add, and edit farm records including crops, livestock, and other entities already defined in the Supabase schema. Display real data from tables like farm_records, farm_entities, and farm_activities. Include a Farm Planner view that allows scheduling activities, viewing tasks, and managing timelines. This planner must use existing data and support alerts driven by weather and news insights.
+
+Integrate weather and news directly into farm management. Weather must be location-aware using user profile data or device geolocation, with manual override supported. Show current weather, a 7-day forecast, and optional hourly breakdown. News must be dynamically fetched from verified agricultural sources and filtered by user location. Both weather and news must feed into farm recommendations and alerts, such as warnings for rain, drought, pests, or disease outbreaks. No hardcoded data under any circumstances.
+
+Enhance navigation so the bottom tabs (Home, Market, My Farm, Community, Profile) each lead to fully functional, populated screens. If any screen is empty or partially implemented, build the missing UI and connect it to Supabase data. All interactions such as likes, comments, filters, and navigation must work correctly.
+
+Implement a global Search feature accessible from the Home screen or top navigation. It must return real results from farm data, community posts, and marketplace listings. Results must be clickable and navigate correctly.
+
+Create a complete Profile and Settings system. Settings must include a dark mode toggle that is OFF by default and fully optional, with preference persisted per user. Include notification preferences and language switching based on onboarding selection. Ensure changes apply across the app without breaking layout or visibility.
+
+Ensure onboarding exists and works. First-time users must go through an optional onboarding flow after Google authentication. This flow should collect preferences such as farming type, location, crops or livestock, and interests. It must allow skipping and later editing. Include an “Other” option with manual input. All data must be stored in Supabase profiles or related tables and used to personalize AI, weather, news, and alerts.
+
+Add quick-access entry points for AI and Farm Management across the app so users can reach them from multiple places, not just one screen. These must be visible and intuitive.
+
+If any required data structures are missing for frontend functionality, create the necessary Supabase tables carefully without breaking the existing schema. Do not duplicate existing tables. Extend only where needed.
+
+The UI must be responsive and mobile-first but fully functional on tablets and desktops. Ensure layouts adapt properly and controls remain accessible.
+
+All features must use real data from APIs and Supabase. Implement proper loading states, error handling, and empty states. If an API fails, show a meaningful fallback message, not a blank screen.
+
+Finally, validate the entire user flow end-to-end. A user must be able to open the app, see visible buttons, navigate to every feature, chat with AI, upload an image for diagnosis, manage their farm, view weather and news, receive relevant recommendations, and update settings without encountering missing UI, broken navigation, or non-functional elements.
+
+Do not stop at partial implementation. The application must be fully interactive, complete, and usable.

@@ -25,13 +25,16 @@ src/
     Notifications.tsx      # Notifications
     Onboarding.tsx         # 9-step wizard: welcome → name → role → location → language → (farmer: types/follow-ups/scale) → interests → done
     Profile.tsx            # Profile summary + inline edit form (name, bio, role, location, language, activities, crops, livestock, interests, phone)
-    FarmAssistant.tsx      # AI assistant
+    FarmAssistant.tsx      # AI assistant (chat, modes, image upload)
+    ImageDiagnosis.tsx     # Dedicated camera/upload diagnosis screen (uses analyzeImage)
+    FarmPlanner.tsx        # Tasks across all farm activities, grouped Overdue/Today/This Week/Later/Completed
+    WeatherDetails.tsx     # Full weather screen — current, alerts, 7-day, 24-hour
     AdminDashboard.tsx     # Admin panel (role-gated)
   components/
     ui/                    # shadcn/ui base components
     farm/                  # ActivityTimeline, AddRecordSheet, CreateActivitySheet
     community/             # PostCard (share/delete/report/block), CreatePostSheet
-    home/                  # SocialFeed, Weather, Alerts, News
+    home/                  # QuickActions, SocialFeed, Weather, Alerts, News
     onboarding/            # Onboarding flow
   contexts/
     AuthContext.tsx        # Auth state — loads full profile from Supabase, handles OAuth redirects
