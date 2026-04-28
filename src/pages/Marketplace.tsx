@@ -1,5 +1,5 @@
 import AppLayout from "@/components/AppLayout";
-import { Search, SlidersHorizontal, MapPin, ShoppingBag, Plus, LogIn, Loader2, Phone } from "lucide-react";
+import { Search, MapPin, ShoppingBag, Plus, LogIn, Loader2, Phone } from "lucide-react";
 import { motion } from "framer-motion";
 import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -7,6 +7,7 @@ import { fetchListings, createListing } from "@/lib/supabaseService";
 import EmptyState from "@/components/ui/EmptyState";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 
 // DB has no category column — we store category locally in the title/description
 // price is numeric in DB, contact_info replaces phone
@@ -54,8 +55,10 @@ const Marketplace = () => {
       setForm(defaultForm);
     },
     onError: () => {
-      // Surface error to user — toast would be ideal but keeping component self-contained
-      alert("Failed to create listing. Please try again.");
+      toast.error("Failed to create listing. Please try again.");
+    },
+    onSettled: (data) => {
+      if (data) toast.success("Listing published");
     },
   });
 
@@ -109,10 +112,16 @@ const Marketplace = () => {
               className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
               data-testid="input-search-marketplace"
             />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                aria-label="Clear search"
+                className="text-xs text-muted-foreground hover:text-foreground"
+              >
+                Clear
+              </button>
+            )}
           </div>
-          <button className="flex h-10 w-10 items-center justify-center rounded-xl border bg-card text-muted-foreground">
-            <SlidersHorizontal className="h-4 w-4" />
-          </button>
         </div>
 
         {isLoading ? (

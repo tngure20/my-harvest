@@ -289,3 +289,20 @@ All post/comment/listing queries use **two-step batch fetching** — never Supab
 - FK joins avoided — all joins done in JS with batch queries for maximum compatibility
 - Optimistic updates on post creation with rollback on failure
 - `communityId` filter chip strip on feed for community-scoped browsing
+
+## Hardening Pass (April 2026)
+- **Image upload safety** (`aiService.callBackendImage`):
+  - Replaced `btoa(String.fromCharCode(...bytes))` with chunked 32 KB encoder (`fileToBase64`) — avoids stack-overflow crash on images > ~100 KB
+  - Added client-side `compressImage` (canvas resize to 1280 px max, JPEG q=0.85, target < 1 MB) so we never POST oversized payloads to the Edge Function
+- **AI gateway error categorization** (`describeGatewayError`):
+  - 401 → "AI service is not authorized"; 429 → rate-limited; 503 → unavailable; network → "check your connection". Replaces opaque `error.message` passthrough in both text and image calls
+  - `FarmAssistant` chat surfaces friendly messages mapped from these categories instead of a generic "couldn't process"
+- **Image input validation** (`FarmAssistant.ImageUploadBar`): now enforces image MIME type + 8 MB cap with `sonner` toasts (was silently accepting anything)
+- **Farm Planner timezone safety** (`parseLocalDate`): `YYYY-MM-DD` strings parsed as local midnight (not UTC), so date buckets are correct in any timezone
+- **Farm Planner ↔ Weather integration**: top severe-weather alert banner at top of `/planner`, links to `/weather` for detail
+- **Dead-click cleanup**:
+  - Removed non-functional `SlidersHorizontal` filter button on Marketplace; added a working "Clear" button on the search input
+  - Replaced `alert()` in Marketplace listing creation with `sonner` toast (success + error)
+  - Removed dead "See all" button on AgriNews home card (it WAS the news section)
+- **React Query defaults** (`App.tsx`): `staleTime: 60 s`, `gcTime: 5 min`, `refetchOnWindowFocus: false`, `retry: 1` — eliminates accidental refetches on tab focus
+- **Note on news/AI gateway 401s**: Edge Function `ai-gateway` is returning non-2xx responses in dev. Frontend handles gracefully (cached/stale fallback for news, knowledge-base fallback for AI). Backend redeploy / `HF_API_KEY` check is a separate ops task — not changed per project constraints.

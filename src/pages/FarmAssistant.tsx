@@ -16,6 +16,7 @@ import { queryAI, analyzeImage, queryActivityAdvice, subscribeAIStatus, type AIS
 import { getWeatherContext } from "@/services/weatherService";
 import type { FarmActivity } from "@/lib/dataService";
 import ReactMarkdown from "react-markdown";
+import { toast } from "sonner";
 
 // ─── Chat message types ────────────────────────────────────────────────────────
 
@@ -246,6 +247,16 @@ const ImageUploadBar = ({
         onChange={(e) => {
           const file = e.target.files?.[0];
           if (!file) return;
+          if (!file.type.startsWith("image/")) {
+            toast.error("Please select an image file");
+            e.target.value = "";
+            return;
+          }
+          if (file.size > 8 * 1024 * 1024) {
+            toast.error("Image is too large (max 8 MB)");
+            e.target.value = "";
+            return;
+          }
           const preview = URL.createObjectURL(file);
           onImageSelected(file, preview);
           e.target.value = "";
@@ -399,11 +410,14 @@ const FarmAssistant = () => {
         aiResponse,
         pending: false,
       });
-    } catch {
-      replaceMessage(assistantId, {
-        content: "Sorry, I couldn't process your request right now. Please try again.",
-        pending: false,
-      });
+    } catch (err) {
+      const reason = (err as Error)?.message || "";
+      const friendly =
+        /401|unauthor/i.test(reason)        ? "AI service is not authorized right now. Please try again later." :
+        /rate|429/i.test(reason)            ? "Too many requests — please wait a moment and try again." :
+        /network|fetch|failed to/i.test(reason) ? "Network error — check your connection and try again." :
+                                              "Sorry, I couldn't process your request right now. Please try again.";
+      replaceMessage(assistantId, { content: friendly, pending: false });
     } finally {
       setIsTyping(false);
     }

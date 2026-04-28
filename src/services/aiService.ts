@@ -87,7 +87,7 @@ async function callBackendText(prompt: string, maxTokens = 600, temperature = 0.
     const { data, error } = await supabase.functions.invoke("ai-gateway/text", {
       body: { prompt, maxTokens, temperature },
     });
-    if (error) throw new Error(`AI gateway error: ${error.message}`);
+    if (error) throw new Error(describeGatewayError(error));
 
     if (data?.error === "model_loading") {
       if (attempt > MAX_WARMUP_RETRIES) {
@@ -117,18 +117,94 @@ async function callBackendText(prompt: string, maxTokens = 600, temperature = 0.
   throw new Error("AI backend exhausted retries");
 }
 
+/** Convert a file to a base64 string in safe 32KB chunks (avoids "too many
+ *  arguments" stack overflow on large images that `String.fromCharCode(...bytes)`
+ *  triggers when the byte array exceeds ~100KB). */
+async function fileToBase64(file: Blob): Promise<string> {
+  const buffer = await file.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+  const CHUNK = 0x8000; // 32KB
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    const slice = bytes.subarray(i, i + CHUNK);
+    binary += String.fromCharCode.apply(null, slice as unknown as number[]);
+  }
+  return btoa(binary);
+}
+
+/** Resize + re-encode an image client-side so we never POST more than ~1MB to
+ *  the edge function. Returns the original file unchanged if resizing fails or
+ *  isn't beneficial. */
+async function compressImage(
+  file: File,
+  opts: { maxDim?: number; quality?: number; maxBytes?: number } = {}
+): Promise<{ blob: Blob; type: string }> {
+  const { maxDim = 1280, quality = 0.85, maxBytes = 1_000_000 } = opts;
+
+  // Tiny images don't need compression.
+  if (file.size <= maxBytes && !file.type.includes("heic")) {
+    return { blob: file, type: file.type || "image/jpeg" };
+  }
+
+  try {
+    const url = URL.createObjectURL(file);
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const i = new Image();
+      i.onload  = () => resolve(i);
+      i.onerror = () => reject(new Error("decode failed"));
+      i.src = url;
+    });
+
+    const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+    const w = Math.max(1, Math.round(img.width  * scale));
+    const h = Math.max(1, Math.round(img.height * scale));
+
+    const canvas = document.createElement("canvas");
+    canvas.width  = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("no 2d context");
+    ctx.drawImage(img, 0, 0, w, h);
+    URL.revokeObjectURL(url);
+
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob((b) => resolve(b), "image/jpeg", quality)
+    );
+    if (!blob) throw new Error("encode failed");
+
+    // If compression somehow made it bigger, fall back to original.
+    if (blob.size > file.size) return { blob: file, type: file.type || "image/jpeg" };
+    return { blob, type: "image/jpeg" };
+  } catch (e) {
+    console.warn("[aiService] image compression skipped:", (e as Error).message);
+    return { blob: file, type: file.type || "image/jpeg" };
+  }
+}
+
+/** Categorise gateway failures so the UI can show useful messages. */
+function describeGatewayError(err: { message?: string; status?: number; context?: { status?: number } } | null): string {
+  if (!err) return "Unknown gateway error";
+  const status = err.status ?? err.context?.status;
+  const msg = err.message || "";
+  if (status === 401 || /401|unauthor/i.test(msg)) return "AI service is not authorized (401). The Edge Function may need redeployment.";
+  if (status === 429 || /429|rate/i.test(msg))    return "AI service rate-limited. Please wait a moment and try again.";
+  if (status === 503 || /503|unavail/i.test(msg)) return "AI service is temporarily unavailable. Please try again shortly.";
+  if (/network|fetch|failed to/i.test(msg))       return "Network error reaching AI service. Check your connection.";
+  return msg || "AI gateway error";
+}
+
 async function callBackendImage(
   file: File
 ): Promise<{ label: string; score: number }[]> {
-  const buffer = await file.arrayBuffer();
-  const bytes = new Uint8Array(buffer);
-  const imageBase64 = btoa(String.fromCharCode(...bytes));
+  // Compress before encoding — saves bandwidth + avoids edge function timeout.
+  const { blob, type } = await compressImage(file);
+  const imageBase64 = await fileToBase64(blob);
 
   for (let attempt = 1; attempt <= MAX_WARMUP_RETRIES + 1; attempt++) {
     const { data, error } = await supabase.functions.invoke("ai-gateway/image", {
-      body: { imageBase64, contentType: file.type || "image/jpeg" },
+      body: { imageBase64, contentType: type },
     });
-    if (error) throw new Error(`AI gateway image error: ${error.message}`);
+    if (error) throw new Error(describeGatewayError(error));
 
     if (data?.error === "model_loading") {
       if (attempt > MAX_WARMUP_RETRIES) {

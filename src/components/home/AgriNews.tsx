@@ -1,4 +1,4 @@
-import { Newspaper, ArrowRight, ExternalLink, RefreshCw } from "lucide-react";
+import { Newspaper, ExternalLink, RefreshCw } from "lucide-react";
 import { motion } from "framer-motion";
 import { useEffect, useState, useCallback } from "react";
 import { getArticles } from "@/lib/dataService";
@@ -107,11 +107,6 @@ const AgriNews = () => {
           >
             <RefreshCw className={`h-3.5 w-3.5 text-muted-foreground ${refreshing ? "animate-spin" : ""}`} />
           </button>
-          {hasContent && (
-            <button className="flex items-center gap-1 text-xs font-medium text-primary">
-              See all <ArrowRight className="h-3 w-3" />
-            </button>
-          )}
         </div>
       </div>
 

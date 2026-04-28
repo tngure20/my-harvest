@@ -3,13 +3,14 @@ import AppLayout from "@/components/AppLayout";
 import { motion } from "framer-motion";
 import {
   ChevronLeft, CalendarDays, Loader2, LogIn, CheckCircle2, Circle,
-  CalendarClock, AlertCircle,
+  CalendarClock, AlertCircle, CloudRain,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { fetchFarmActivities, toggleFarmTask } from "@/lib/supabaseService";
 import { useAuth } from "@/contexts/AuthContext";
 import EmptyState from "@/components/ui/EmptyState";
+import { getWeatherContext } from "@/services/weatherService";
 
 type PlannedTask = {
   id: string;
@@ -38,11 +39,26 @@ function startOfDay(d: Date): Date {
   return x;
 }
 
+/** Parse a due-date string into a local-timezone Date.
+ *  - "YYYY-MM-DD" is treated as that calendar day in the user's local timezone
+ *    (NOT UTC midnight, which would shift the date by hours in any non-UTC zone).
+ *  - Full ISO timestamps (with "T") are parsed normally and converted to local. */
+function parseLocalDate(s: string): Date | null {
+  if (!s) return null;
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  if (dateOnly) {
+    const [, y, m, d] = dateOnly;
+    return new Date(Number(y), Number(m) - 1, Number(d));
+  }
+  const dt = new Date(s);
+  return Number.isNaN(dt.getTime()) ? null : dt;
+}
+
 function bucketFor(dueIso: string, completed: boolean): Bucket {
   if (completed) return "completed";
-  if (!dueIso) return "later";
-  const due = startOfDay(new Date(dueIso));
-  if (Number.isNaN(due.getTime())) return "later";
+  const parsed = parseLocalDate(dueIso);
+  if (!parsed) return "later";
+  const due = startOfDay(parsed);
   const today = startOfDay(new Date());
   const diffDays = Math.round((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
   if (diffDays < 0) return "overdue";
@@ -52,9 +68,8 @@ function bucketFor(dueIso: string, completed: boolean): Bucket {
 }
 
 function formatDue(dueIso: string): string {
-  if (!dueIso) return "No date";
-  const d = new Date(dueIso);
-  if (Number.isNaN(d.getTime())) return "No date";
+  const d = parseLocalDate(dueIso);
+  if (!d) return "No date";
   return d.toLocaleDateString("en-KE", { weekday: "short", month: "short", day: "numeric" });
 }
 
@@ -68,6 +83,13 @@ const FarmPlanner = () => {
     queryFn: () => fetchFarmActivities(user!.id),
     enabled: !!user?.id,
   });
+
+  const { data: weather } = useQuery({
+    queryKey: ["weather-context-planner"],
+    queryFn: () => getWeatherContext(),
+    staleTime: 30 * 60_000, // align with weather service cache
+  });
+  const topAlert = weather?.alerts?.[0];
 
   const toggleMutation = useMutation({
     mutationFn: ({ taskId, completed }: { taskId: string; completed: boolean }) =>
@@ -170,6 +192,26 @@ const FarmPlanner = () => {
           <Stat label="Overdue" value={totals.overdue} icon={AlertCircle} accent="text-rose-600 dark:text-rose-400" />
           <Stat label="Done" value={totals.done} icon={CheckCircle2} accent="text-emerald-600 dark:text-emerald-400" />
         </div>
+
+        {/* Weather alert banner — helps farmers re-plan tasks when severe weather is coming */}
+        {topAlert && (
+          <button
+            type="button"
+            onClick={() => navigate("/weather")}
+            className="w-full text-left flex items-start gap-2 rounded-xl border border-amber-300/50 bg-amber-50 dark:border-amber-700/40 dark:bg-amber-950/30 p-3"
+            data-testid="banner-weather-alert"
+          >
+            <CloudRain className="h-4 w-4 mt-0.5 text-amber-700 dark:text-amber-400 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-semibold text-amber-900 dark:text-amber-200">
+                {topAlert.title}
+              </p>
+              <p className="text-[11px] text-amber-800/80 dark:text-amber-300/80 line-clamp-2">
+                {topAlert.message}
+              </p>
+            </div>
+          </button>
+        )}
 
         {tasks.length === 0 ? (
           <EmptyState

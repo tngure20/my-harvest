@@ -1,0 +1,27 @@
+You are working on a nearly complete agricultural platform with a functioning frontend and a Supabase backend (auth, database, edge functions including ai-gateway). The UI is already built and routes exist. Your task is NOT to redesign or rebuild. Your task is to audit, fix, and harden the entire application so that it works reliably in real-world conditions.
+
+Do not change API keys, do not break Supabase schema, and do not remove existing features. You may improve logic, error handling, performance, and integration where necessary.
+
+Start by fixing the AI system reliability. The ai-gateway Edge Function is currently returning 401 errors. Ensure all frontend calls to Supabase functions are correctly authenticated or explicitly configured to work without JWT where intended. Verify that requests to ai-gateway/text, ai-gateway/image, and ai-gateway/embed succeed consistently. Handle cases where the model is loading, times out, or returns unexpected data. The AI Assistant UI must never freeze or silently fail. Always show loading, retry, and meaningful error states.
+
+Fix the Image Diagnosis pipeline for real-world usage. Before sending images, implement client-side compression and resizing to prevent large payload failures, especially on mobile devices. Ensure base64 conversion is safe and does not crash the app. Add validation for unsupported file types and oversized files. Ensure the backend response is always handled safely, even if predictions are empty or malformed.
+
+Fix all date and time logic in Farm Planner. Ensure proper timezone handling using the user’s local timezone while keeping Supabase timestamps consistent (UTC). Correctly classify tasks into Overdue, Today, Upcoming, and Completed without misplacement due to timezone differences. Ensure date comparisons are robust and not dependent on naive Date parsing.
+
+Harden Weather and News integrations. Ensure weather data always resolves using a fallback chain: device geolocation → user profile location → country-level fallback. Do not allow the UI to hang if geolocation fails. Ensure weather APIs handle failure, rate limits, and timeouts gracefully with fallback messaging. For news, ensure only verified agricultural sources are used, results are filtered by location, and empty states are handled cleanly. Never display broken or partial UI.
+
+Optimize API usage and performance. Prevent unnecessary repeated API calls by implementing caching where appropriate (short-term for weather/news, longer for embeddings). Ensure parallel requests do not overload the UI. Introduce proper loading states and avoid blocking rendering. The app should feel responsive even on slow networks.
+
+Audit all navigation and routing behavior. Ensure every route works when accessed directly (deep linking), after refresh, and after authentication state changes. Fix any broken back navigation, stale state issues, or blank screens. Ensure users can move between Home, AI, Diagnosis, Farm, Planner, Weather, and News without losing context or crashing the app.
+
+Validate all UI interactions. Every button, toggle, filter, like button, and navigation element must be functional. If any UI element exists but does nothing, implement its logic. If any action fails, show feedback to the user. There must be no dead clicks anywhere in the app.
+
+Strengthen the farmer workflow integration. Ensure that weather data, news alerts, and AI insights are actually connected to farm management. For example, weather conditions should influence recommendations, alerts should surface in relevant farm views, and AI suggestions should reference user crops or livestock when available. The system must behave as a cohesive assistant, not disconnected features.
+
+Ensure robustness across devices. Test and fix responsiveness for mobile, tablet, and desktop. Ensure camera access works on supported devices and gracefully falls back to upload where not available.
+
+Implement comprehensive error handling across the entire app. No silent failures. Every failure path must show a clear, user-friendly message and allow retry where possible.
+
+Finally, perform an end-to-end validation of the entire system. A user must be able to log in, navigate the app, access AI chat, upload an image for diagnosis, view and manage farm data, see weather and news relevant to their location, and receive actionable insights without encountering crashes, dead UI, or inconsistent data.
+
+Do not stop at partial fixes. The goal is a stable, production-ready application where all features are fully integrated, reliable, and usable under real-world conditions.
