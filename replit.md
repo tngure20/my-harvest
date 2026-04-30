@@ -378,6 +378,23 @@ The Edge Function automatically receives `SUPABASE_URL`, `SUPABASE_ANON_KEY`, an
 - ✅ Frontend single-endpoint contract — no client-side fusion logic
 - ✅ Weather + news now feed AI reasoning, not just UI cards
 
+## Frontend Resilience Pass (April 2026 — round 2)
+After the Farm Intelligence Engine landed, a second sweep tightened a few real gaps the audit surfaced:
+- **Dark mode default fixed** (`index.html`): the boot script no longer auto-applies the OS `prefers-color-scheme: dark`; light is the default and dark is opt-in only via Settings, matching the spec ("OFF by default").
+- **Farm Intel transient retry** (`farmIntelService.ts`): the single `ai-gateway/farm-intel` call now retries up to 2 times with 4s/8s exponential backoff on:
+  - Supabase-level 5xx / network errors
+  - Application-level transient codes (`model_loading`, `hf_error_5xx`, `news_fetch_failed`, `empty_response`, `internal`)
+  Mirrors the warm-up retry pattern already used by `/text` and `/image` in `aiService.ts`. Combined with the backend's heuristic fallback, the user always sees actionable output — never a one-shot "service warming up" miss.
+- **Audit confirmed already-done items** (no rework required):
+  - AI 401 / 429 / 503 / network classification + friendly messaging — done in earlier hardening pass
+  - Image client-side compression + chunked base64 upload — done in `aiService.compressImage` (used by both ImageDiagnosis and FarmAssistant)
+  - Image preview, MIME validation, 8 MB cap, friendly failure message — done in `ImageDiagnosis.tsx` + `FarmAssistant.ImageUploadBar`
+  - Farm Planner UTC→local timezone safety — done via `parseLocalDate` in `FarmPlanner.tsx`
+  - Weather location fallback chain (manual override → device GPS → profile → Nairobi default) — already implemented in `weatherService.getWeatherContext`
+  - AI text/image retry with exponential backoff on `model_loading` — already implemented in `aiService.callBackendText/Image` with status events for warmup UI
+  - Settings page exists with dark mode, language, manual location, notification prefs, privacy prefs — `src/pages/Settings.tsx` (linked from Profile)
+  - Farmer value loop (weather + news + farm + AI fused) — done by the Farm Intelligence Engine
+
 ## Hardening Pass (April 2026)
 - **Image upload safety** (`aiService.callBackendImage`):
   - Replaced `btoa(String.fromCharCode(...bytes))` with chunked 32 KB encoder (`fileToBase64`) — avoids stack-overflow crash on images > ~100 KB

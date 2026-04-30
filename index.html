@@ -24,13 +24,14 @@
   </head>
   <body>
     <script>
-      // Apply theme preference before first paint to avoid a flash of light theme
+      // Apply theme preference before first paint to avoid a flash of unstyled theme.
+      // Light is the default; dark is opt-in via Settings only (we deliberately
+      // ignore prefers-color-scheme so the toggle behaves predictably).
       (function () {
         try {
-          var pref = localStorage.getItem("harvest_theme");
-          var prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
-          var dark = pref === "dark" || (pref === null && prefersDark);
-          if (dark) document.documentElement.classList.add("dark");
+          if (localStorage.getItem("harvest_theme") === "dark") {
+            document.documentElement.classList.add("dark");
+          }
         } catch (e) { /* localStorage may be blocked */ }
       })();
     </script>

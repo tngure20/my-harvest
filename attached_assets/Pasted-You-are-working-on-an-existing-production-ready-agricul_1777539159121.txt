@@ -1,0 +1,33 @@
+You are working on an existing production-ready agricultural platform with a fully functional backend using Supabase (database, authentication, storage), Edge Functions (ai-gateway for text, image, embeddings), and integrated weather and news APIs. Do NOT modify backend logic, API keys, or existing Supabase schema unless something is critically missing. Do NOT break existing integrations. Your task is to FIX and COMPLETE the frontend so that the application is not only functional but stable, resilient, and production-ready under real-world usage.
+
+The application currently appears complete but has hidden failures, edge case bugs, and missing robustness. Your goal is to eliminate all weak points and ensure every feature works reliably across devices, network conditions, and user behaviors.
+
+Start with the AI system. The frontend must properly handle ai-gateway responses and failures. Detect and handle HTTP 401 errors gracefully by showing a clear UI message indicating service unavailability instead of failing silently. Do not assume success responses. Implement retries for transient failures and proper error states. The AI chat interface must remain fully functional with loading indicators, timeout handling, and recovery behavior.
+
+For Image Diagnosis, implement client-side image optimization before sending to the backend. Resize and compress images to a safe size to prevent large payload failures, especially on mobile devices. Ensure the upload flow includes preview, progress indication, and failure handling. If the backend fails or times out, show a meaningful fallback message. Ensure predictions always render safely even if partial or low confidence.
+
+Fix all time-related logic in the Farm Planner. All timestamps from Supabase are in UTC. Convert them properly to the user’s local timezone before categorizing tasks into Overdue, Today, This Week, and Later. Ensure consistent behavior regardless of user location. Prevent tasks from jumping categories incorrectly due to timezone mismatches.
+
+Harden weather and news integration. These APIs must never break the UI. Implement a strict fallback chain for location detection: device geolocation → user profile location → country-level fallback. If APIs fail or rate-limit, display cached or last-known data where possible, or a clear fallback state explaining the issue. Do not leave empty or broken sections. Ensure weather includes current, 7-day forecast, and optional hourly data, and that news is always location-relevant and refreshed dynamically.
+
+Improve navigation stability across the entire app. Ensure all routes (/diagnose, /planner, /weather, AI chat, etc.) support direct access, browser refresh, back navigation, and tab switching without breaking or losing state. Prevent blank screens, infinite loading, or stale data. Handle unauthenticated access by redirecting or gating features properly.
+
+Optimize performance across the app. Prevent excessive simultaneous API calls. Use proper loading states and avoid blocking the UI. Lazy load heavy components where appropriate. Ensure the app remains responsive even on slow networks or low-end devices.
+
+Strengthen the “farmer value loop” across the system. The app must clearly connect weather, news, farm data, and AI. For example, weather conditions should influence alerts and recommendations inside Farm Management. News about pests or droughts should surface relevant warnings. AI should use this context when providing advice. Ensure this flow is visible and intuitive, not hidden or disconnected.
+
+Ensure all UI components are real, visible, and functional. Every button, card, toggle, filter, and navigation element must work. No placeholders. No dead clicks. All interactions must trigger real logic or navigation and display real data.
+
+Refine the Home screen so quick action buttons (AI Chat, Image Diagnosis, My Farm, Farm Planner, Weather, News) are clearly visible, responsive, and reliably navigate to working features. Do not hide critical actions.
+
+Improve the Settings system significantly. Create a dedicated Settings page accessible from Profile. Implement a fully working dark mode toggle that is OFF by default and can be switched on or off instantly. The preference must persist per user and apply globally without breaking layout or readability. Include notification preferences and language switching tied to onboarding. Ensure settings changes reflect immediately across the app.
+
+Ensure onboarding is fully integrated and affects personalization. User preferences such as location, farming type, and interests must directly influence weather, news, AI responses, and alerts. Allow users to update these preferences later.
+
+Ensure responsiveness across all devices. The UI must adapt cleanly to mobile, tablet, and desktop without breaking layouts or hiding functionality.
+
+All features must use real data from Supabase and external APIs. Do not introduce hardcoded data. Implement proper loading, error, and empty states everywhere.
+
+Finally, validate the entire application end-to-end under real conditions. A user must be able to open the app, navigate through all features, interact with AI, upload and analyze images, manage their farm, view weather and news, receive alerts, and change settings without encountering failures, broken UI, or inconsistent behavior. The system must behave reliably under slow networks, API failures, and edge navigation cases.
+
+Do not stop at visual completion. The application must be stable, resilient, and fully functional in real-world use.

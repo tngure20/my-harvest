@@ -76,11 +76,39 @@ export function clearFarmIntelCache(): void {
   _cache = null;
 }
 
+// ─── Retry / backoff ─────────────────────────────────────────────────────────
+// Mirrors the warm-up retry pattern used in `aiService.ts` for /text and /image.
+// The backend handler may itself return a `model_loading`-style error if the
+// underlying Mistral call cold-starts — and Supabase Edge Functions can also
+// throw transient 5xx during HF cold-starts. We retry with exponential backoff
+// so the UI sees a final result instead of a one-shot "service warming up" miss.
+
+const MAX_RETRIES   = 2;     // 1 initial + 2 retries = 3 total attempts
+const BASE_DELAY_MS = 4000;  // 4s, 8s
+
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+function isTransientError(err: { status?: number; context?: { status?: number }; message?: string } | null): boolean {
+  if (!err) return false;
+  const status = err.status ?? err.context?.status;
+  if (status === 502 || status === 503 || status === 504 || status === 408) return true;
+  const msg = (err.message || "").toLowerCase();
+  return /network|fetch|timeout|model_loading|warming|temporarily|503|504|non-2xx/i.test(msg);
+}
+
+function isTransientServerCode(code: string | undefined): boolean {
+  if (!code) return false;
+  return /^(model_loading|hf_error_5\d\d|news_fetch_failed|empty_response|internal)$/i.test(code);
+}
+
 // ─── Public API ──────────────────────────────────────────────────────────────
 
 /**
  * Fetch unified farm intelligence for the signed-in user. The Edge Function
- * does ALL the orchestration — this is a single network call.
+ * does ALL the orchestration — this is a single network call (with transient
+ * retry/backoff). Never silent: on exhausted retries we surface a friendly
+ * message; the backend itself returns a heuristic fallback when AI is down so
+ * even a "successful" response may have `aiSource: "fallback"`.
  *
  * @param opts.force  Bypass both client and server caches (use sparingly —
  *                    triggers a full Mistral call)
@@ -92,30 +120,50 @@ export async function fetchFarmIntelligence(
     return _cache.data;
   }
 
-  const { data, error } = await supabase.functions.invoke("ai-gateway/farm-intel", {
-    body: { force: !!opts.force },
-  });
+  let lastErr: Error | null = null;
 
-  if (error) {
-    throw new Error(describeError(error));
-  }
-  if (!data || data.error) {
-    throw new Error(data?.error ? friendlyServerError(data.error) : "Empty response from intelligence engine");
-  }
-  if (!data.intelligence) {
-    throw new Error("Invalid response from intelligence engine");
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    const { data, error } = await supabase.functions.invoke("ai-gateway/farm-intel", {
+      body: { force: !!opts.force },
+    });
+
+    // Network / supabase-level error
+    if (error) {
+      if (isTransientError(error) && attempt < MAX_RETRIES) {
+        await sleep(BASE_DELAY_MS * Math.pow(2, attempt));
+        continue;
+      }
+      throw new Error(describeError(error));
+    }
+
+    // Application-level error from the function
+    if (!data || data.error) {
+      const code = data?.error as string | undefined;
+      if (isTransientServerCode(code) && attempt < MAX_RETRIES) {
+        await sleep(BASE_DELAY_MS * Math.pow(2, attempt));
+        continue;
+      }
+      lastErr = new Error(code ? friendlyServerError(code) : "Empty response from intelligence engine");
+      throw lastErr;
+    }
+
+    if (!data.intelligence) {
+      throw new Error("Invalid response from intelligence engine");
+    }
+
+    const result: FarmIntelResult = {
+      intelligence: data.intelligence as FarmIntelligence,
+      aiSource:     (data.aiSource as "huggingface" | "fallback") ?? "fallback",
+      contextMeta:  data.contextMeta as FarmIntelMeta | undefined,
+      cachedAt:     data.cachedAt as string | undefined,
+      fromCache:    !!data.fromCache,
+    };
+
+    _cache = { data: result, expiresAt: Date.now() + CLIENT_TTL_MS };
+    return result;
   }
 
-  const result: FarmIntelResult = {
-    intelligence: data.intelligence as FarmIntelligence,
-    aiSource:     (data.aiSource as "huggingface" | "fallback") ?? "fallback",
-    contextMeta:  data.contextMeta as FarmIntelMeta | undefined,
-    cachedAt:     data.cachedAt as string | undefined,
-    fromCache:    !!data.fromCache,
-  };
-
-  _cache = { data: result, expiresAt: Date.now() + CLIENT_TTL_MS };
-  return result;
+  throw lastErr ?? new Error("Intelligence service exhausted retries");
 }
 
 function describeError(err: { message?: string; status?: number; context?: { status?: number } } | null): string {
